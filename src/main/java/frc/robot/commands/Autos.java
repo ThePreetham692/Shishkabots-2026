@@ -13,6 +13,7 @@ public final class Autos {
   public static Command exampleAuto(ExampleSubsystem subsystem) {
     return Commands.sequence(subsystem.exampleMethodCommand(), new ExampleCommand(subsystem));
   }
+  // test commit
 
   private Autos() {
     throw new UnsupportedOperationException("This is a utility class!");

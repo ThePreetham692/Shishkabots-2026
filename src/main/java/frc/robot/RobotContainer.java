@@ -11,6 +11,13 @@ import frc.robot.subsystems.ExampleSubsystem;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
+import frc.robot.commands.DefaultDriveCommand;
+import frc.robot.commands.EmergencyStopCommand;
+import frc.robot.subsystems.DriveSubsystem;
+import edu.wpi.first.wpilibj2.command.button.JoystickButton;
+import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.wpilibj.XboxController;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a
@@ -20,7 +27,56 @@ import edu.wpi.first.wpilibj2.command.button.Trigger;
  */
 public class RobotContainer {
   // The robot's subsystems and commands are defined here...
-  private final ExampleSubsystem m_exampleSubsystem = new ExampleSubsystem();
+  
+  // Commented out as Limelight is no longer used
+  // private final LimelightSubsystem limelightSubsystem = new LimelightSubsystem();
+  private final DriveSubsystem driveSubsystem = new DriveSubsystem();
+
+  // The driver's controllers
+  // Primary controller (port 0) is for the main driver
+  // Secondary controller (port 1) is for the operator/co-pilot
+  // Both controllers have the same button mappings for redundancy
+  private final XboxController driveController = new XboxController(0); // Primary controller on port 0
+  private final XboxController mechanismController = new XboxController(1); // Secondary controller on port 1
+
+  private static final double DEADBAND = 0.095;
+  private static final double SHOOTER_DEADBAND = 0.06;
+
+  // setup the AutoBuilder with all pathplanner paths in place
+  private  SendableChooser<Command> autoChooser;
+
+  // Commented out as Limelight is no longer used
+  /*
+  public LimelightSubsystem getLimelightSubsystem() {
+    return limelightSubsystem;
+  }
+  */
+  private double applyDeadband(double value) {
+    if (Math.abs(value) < DEADBAND) {
+      return 0.0;
+    }
+    return value;
+  }
+
+  private double getForwardInput() {
+    // Use primary controller input, but if it's not moving, check secondary
+    double primaryInput = -driveController.getLeftY();
+    return applyDeadband(primaryInput);
+  }
+
+  private double getStrafeInput() {
+    // Use primary controller input, but if it's not moving, check secondary
+    double primaryInput = -driveController.getLeftX();
+    return applyDeadband(primaryInput);
+  }
+
+  private double getRotationInput() {
+    // Use primary controller input, but if it's not moving, check secondary
+    double primaryInput = -driveController.getRightX();
+    return applyDeadband(primaryInput);
+  }
+
+  
 
   // Replace with CommandPS4Controller or CommandJoystick if needed
   private final CommandXboxController m_driverController =
@@ -30,6 +86,15 @@ public class RobotContainer {
   public RobotContainer() {
     // Configure the trigger bindings
     configureBindings();
+     // Set up the default command for the drive subsystem
+    driveSubsystem.setDefaultCommand(
+        new DefaultDriveCommand(
+            driveSubsystem,
+            () -> getForwardInput(),  // Forward/backward
+            () -> getStrafeInput(),   // Left/right
+            () -> getRotationInput()  // Rotation
+        )
+    ); 
   }
 
   /**
@@ -42,13 +107,28 @@ public class RobotContainer {
    * joysticks}.
    */
   private void configureBindings() {
-    // Schedule `ExampleCommand` when `exampleCondition` changes to `true`
-    new Trigger(m_exampleSubsystem::exampleCondition)
-        .onTrue(new ExampleCommand(m_exampleSubsystem));
+    // Configure button bindings for both controllers
+    // Both controllers have identical bindings for redundancy and flexibility
+    // This allows either the driver or operator to control any function if needed
+    
+    // Primary Xbox Controller Bindings (port 0)
 
-    // Schedule `exampleMethodCommand` when the Xbox controller's B button is pressed,
-    // cancelling on release.
-    m_driverController.b().whileTrue(m_exampleSubsystem.exampleMethodCommand());
+    // Emergency stop for all subsystems (Back + Start buttons together)
+    new JoystickButton(driveController, XboxController.Button.kBack.value)
+        .and(new JoystickButton(driveController, XboxController.Button.kStart.value))
+        .onTrue(new EmergencyStopCommand(driveSubsystem));
+
+      // Slow driving mode for primary controller
+    new JoystickButton(driveController, XboxController.Button.kRightBumper.value) 
+    .whileTrue(
+        new DefaultDriveCommand(
+            driveSubsystem,
+            () -> getForwardInput() * 0.45,
+            () -> getStrafeInput() * 0.45,
+            () -> getRotationInput() * 0.45
+        )
+    );
+    
   }
 
   /**
@@ -58,6 +138,6 @@ public class RobotContainer {
    */
   public Command getAutonomousCommand() {
     // An example command will be run in autonomous
-    return Autos.exampleAuto(m_exampleSubsystem);
+    return autoChooser.getSelected();
   }
 }
