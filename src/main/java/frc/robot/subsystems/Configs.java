@@ -25,27 +25,31 @@ public class Configs extends SubsystemBase {
             driveConfig
                 .inverted(inverted ? true: false)
                 .idleMode(IdleMode.kBrake)
-                .smartCurrentLimit(40);
+                .smartCurrentLimit(40)
+                .voltageCompensation(12.0)
+                .openLoopRampRate(0.15)
+                .closedLoopRampRate(0.15);
             driveConfig.encoder
                 .positionConversionFactor(ModuleConstants.ROTATIONS_TO_METERS)
                 .velocityConversionFactor(ModuleConstants.RPM_TO_MPS); // rotations per minute to MPS
             driveConfig.closedLoop
                 .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
-                .pid(0.04, 0, 0)
+                .pid(0.04, 0, 0.01)
                 .velocityFF(ModuleConstants.DRIVE_VELOCITY_FEEDFOWARD)
                 .outputRange(-1, 1);
         }
         public static void setTurningMotorSettings(SparkMaxConfig turnConfig) {
             turnConfig
                 .idleMode(IdleMode.kBrake)
-                .smartCurrentLimit(20);
+                .smartCurrentLimit(20)
+                .voltageCompensation(12.0);
             turnConfig.absoluteEncoder
                 .inverted(true)
                 .positionConversionFactor(ModuleConstants.ROTATIONS_TO_RADIANS)
                 .velocityConversionFactor(ModuleConstants.RPM_TO_RADPS);
             turnConfig.closedLoop
                 .feedbackSensor(FeedbackSensor.kAbsoluteEncoder)
-                .pid(0.7, 0, 0)
+                .pid(0.7, 0, 0.02)
                 .velocityFF(0)
                 .outputRange(-1, 1)
                 .positionWrappingEnabled(true)

@@ -12,6 +12,7 @@ import com.pathplanner.lib.config.RobotConfig;
 import com.pathplanner.lib.controllers.PPHolonomicDriveController;
 import com.pathplanner.lib.path.PathConstraints;
 
+import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -24,7 +25,6 @@ import edu.wpi.first.util.datalog.DataLog;
 import edu.wpi.first.util.datalog.DoubleLogEntry;
 import edu.wpi.first.wpilibj.DataLogManager;
 import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj.RobotState;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -74,7 +74,7 @@ public class DriveSubsystem extends SubsystemBase {
         DriveConstants.BACK_RIGHT_CHASIS_ANGULAR_OFFSET,
         false, "BackRight");
 
-    public static final double kMaxDriveVEL = 6.58; // m/s
+    // Use DriveConstants.MAX_SPEED_IN_MPS for consistency
     
     private final SwerveDriveKinematics kinematics = new SwerveDriveKinematics(
         m_frontLeftLocation, m_frontRightLocation, m_backLeftLocation, m_backRightLocation);
@@ -96,15 +96,36 @@ public class DriveSubsystem extends SubsystemBase {
         // log field into smartdashboard
         SmartDashboard.putData("Field", m_field);
 
-        try{
+        try {
             DriveConstants.pathPlannerConfig = RobotConfig.fromGUISettings();
-          } catch (Exception e) {
-            // Handle exception as needed
-            e.printStackTrace();
-          }
+        } catch (Exception e) {
+            // PathPlanner settings not found - create a default config for simulation
+            System.err.println("PathPlanner settings.json not found, using default config: " + e.getMessage());
+            try {
+                DriveConstants.pathPlannerConfig = new RobotConfig(
+                    50.0, // mass in kg (estimated)
+                    6.0,  // MOI (moment of inertia)
+                    new com.pathplanner.lib.config.ModuleConfig(
+                        0.0508, // wheel radius in meters (2 inches)
+                        4.0,    // max drive velocity m/s
+                        1.0,    // wheel COF
+                        DCMotor.getNEO(1).withReduction(6.75), // drive motor with gear ratio
+                        60.0,   // drive current limit
+                        1       // number of drive motors per module
+                    ),
+                    m_frontLeftLocation, m_frontRightLocation, m_backLeftLocation, m_backRightLocation
+                );
+            } catch (Exception ex) {
+                System.err.println("Failed to create default RobotConfig: " + ex.getMessage());
+            }
+        }
 
-        // Configure AutoBuilder last
-        AutoBuilder.configure(
+        // Skip AutoBuilder if config failed to load
+        if (DriveConstants.pathPlannerConfig == null) {
+            System.err.println("WARNING: PathPlanner AutoBuilder not configured - no valid RobotConfig");
+        } else {
+            // Configure AutoBuilder
+            AutoBuilder.configure(
                 this::getPose, // Robot pose supplier
                 this::resetOdometry, // Method to reset odometry (will be called if your auto has a starting pose)
                 this::getCurrentSpeeds, // ChassisSpeeds supplier. MUST BE ROBOT RELATIVE
@@ -126,7 +147,8 @@ public class DriveSubsystem extends SubsystemBase {
                 return false; 
                 }, 
                 this // Reference to this subsystem to set requirements
-        ); 
+        );
+        }
 
         // Initialize DataLogManager entries
         DataLog log = DataLogManager.getLog();
@@ -173,7 +195,7 @@ public class DriveSubsystem extends SubsystemBase {
         ChassisSpeeds speeds = new ChassisSpeeds(xSpeed, ySpeed, rot);
         var swerveModuleStates = kinematics.toSwerveModuleStates(speeds);
 
-        SwerveDriveKinematics.desaturateWheelSpeeds(swerveModuleStates, 4.0);
+        SwerveDriveKinematics.desaturateWheelSpeeds(swerveModuleStates, DriveConstants.MAX_SPEED_IN_MPS);
 
         Logger.log("Chassis Speeds - X: " + speeds.vxMetersPerSecond + 
                   ", Y: " + speeds.vyMetersPerSecond + 
@@ -195,11 +217,20 @@ public class DriveSubsystem extends SubsystemBase {
         m_backLeft.setDesiredState(swerveModuleStates[2]);
         m_backRight.setDesiredState(swerveModuleStates[3]);
       }
-        public void drive(ChassisSpeeds speeds) {
-        double xSpeed = speeds.vxMetersPerSecond;
-        double ySpeed = speeds.vyMetersPerSecond;
-        double rot = speeds.omegaRadiansPerSecond;
-        drive(xSpeed, ySpeed, rot);
+    /**
+     * Drive using ChassisSpeeds (already in m/s and rad/s units).
+     * Used by PathPlanner and autonomous commands.
+     */
+    public void drive(ChassisSpeeds speeds) {
+        // ChassisSpeeds are already in real units (m/s, rad/s), not [-1, 1]
+        // So we need to set module states directly without scaling
+        var swerveModuleStates = kinematics.toSwerveModuleStates(speeds);
+        SwerveDriveKinematics.desaturateWheelSpeeds(swerveModuleStates, DriveConstants.MAX_SPEED_IN_MPS);
+
+        m_frontLeft.setDesiredState(swerveModuleStates[0]);
+        m_frontRight.setDesiredState(swerveModuleStates[1]);
+        m_backLeft.setDesiredState(swerveModuleStates[2]);
+        m_backRight.setDesiredState(swerveModuleStates[3]);
     }
 
     public void stop() {
@@ -263,7 +294,15 @@ public class DriveSubsystem extends SubsystemBase {
 
                 // Keep this for visualization tools but remove other SmartDashboard updates
                 SmartDashboard.putNumberArray("SwerveModuleStates", loggingState);
-                
+
+                // === CALIBRATION OUTPUT ===
+                // Point all wheels forward manually, then read these values
+                // Copy these values to Constants.java as angular offsets
+                SmartDashboard.putNumber("Calibration/FrontLeft", m_frontLeft.getRawAbsoluteEncoderPosition());
+                SmartDashboard.putNumber("Calibration/FrontRight", m_frontRight.getRawAbsoluteEncoderPosition());
+                SmartDashboard.putNumber("Calibration/BackLeft", m_backLeft.getRawAbsoluteEncoderPosition());
+                SmartDashboard.putNumber("Calibration/BackRight", m_backRight.getRawAbsoluteEncoderPosition());
+
                 // Log detailed turning motor data for each module
                 Logger.log("Turning Motor Debug Data:");
                 Logger.log("Front Left - Angle: " + Math.toDegrees(m_frontLeft.getSteerAngle()) + 
@@ -304,7 +343,7 @@ public class DriveSubsystem extends SubsystemBase {
         }
   }
   public void setModuleStates(SwerveModuleState[] desiredStates) {
-        SwerveDriveKinematics.desaturateWheelSpeeds(desiredStates, kMaxDriveVEL);
+        SwerveDriveKinematics.desaturateWheelSpeeds(desiredStates, DriveConstants.MAX_SPEED_IN_MPS);
         m_frontLeft.setDesiredState(desiredStates[0]);
         m_frontRight.setDesiredState(desiredStates[1]);
         m_backLeft.setDesiredState(desiredStates[2]);

@@ -62,29 +62,33 @@ public final class Constants {
         public static final Translation2d BACK_LEFT_LOCATION = new Translation2d(-WHEEL_BASE / 2, TRACK_WIDTH / 2);
         public static final Translation2d BACK_RIGHT_LOCATION = new Translation2d(-WHEEL_BASE / 2, -TRACK_WIDTH / 2);
 
-        // angular offsets of modules relative to the chasis
-        /* public static final double FRONT_LEFT_CHASIS_ANGULAR_OFFSET = -Math.PI/2;
-        public static final double FRONT_RIGHT_CHASIS_ANGULAR_OFFSET = 0;
-        public static final double BACK_LEFT_CHASIS_ANGULAR_OFFSET = Math.PI;
-        public static final double BACK_RIGHT_CHASIS_ANGULAR_OFFSET = Math.PI/2; */
-        public static final double FRONT_LEFT_CHASIS_ANGULAR_OFFSET = 0;
-        public static final double FRONT_RIGHT_CHASIS_ANGULAR_OFFSET = 0;
-        public static final double BACK_LEFT_CHASIS_ANGULAR_OFFSET = 0;
-        public static final double BACK_RIGHT_CHASIS_ANGULAR_OFFSET = 0;
+        // ===================== ANGULAR OFFSET CALIBRATION =====================
+        // HOW TO CALIBRATE:
+        // 1. Deploy code to robot and connect to SmartDashboard/Shuffleboard
+        // 2. Manually rotate all wheels to point FORWARD (toward front of robot)
+        // 3. Read values from SmartDashboard under "Calibration/FrontLeft", etc.
+        // 4. Copy those values here as the angular offsets
+        // 5. Re-deploy and test - all wheels should now point forward when driving forward
+        // ======================================================================
+        public static final double FRONT_LEFT_CHASIS_ANGULAR_OFFSET = 0;  // TODO: Calibrate
+        public static final double FRONT_RIGHT_CHASIS_ANGULAR_OFFSET = 0; // TODO: Calibrate
+        public static final double BACK_LEFT_CHASIS_ANGULAR_OFFSET = 0;   // TODO: Calibrate
+        public static final double BACK_RIGHT_CHASIS_ANGULAR_OFFSET = 0;  // TODO: Calibrate
 
-        // Spark Max CAN Ids
-        public static final int DRIVE_FRONT_LEFT_CAN_ID = 13;
+        // Spark Max CAN IDs
+        public static final int DRIVE_FRONT_LEFT_CAN_ID = 3;
         public static final int DRIVE_REAR_LEFT_CAN_ID = 5;
-        public static final int DRIVE_FRONT_RIGHT_CAN_ID = 3;
+        public static final int DRIVE_FRONT_RIGHT_CAN_ID = 1;
         public static final int DRIVE_REAR_RIGHT_CAN_ID = 7;
 
-        public static final int DRIVE_TURN_FRONT_LEFT_CAN_ID = 2;
+        public static final int DRIVE_TURN_FRONT_LEFT_CAN_ID = 4;
         public static final int DRIVE_TURN_REAR_LEFT_CAN_ID = 6;
-        public static final int DRIVE_TURN_FRONT_RIGHT_CAN_ID = 4;
+        public static final int DRIVE_TURN_FRONT_RIGHT_CAN_ID = 2;
         public static final int DRIVE_TURN_REAR_RIGHT_CAN_ID = 8;
-        
-        public static final int PIGEON_CAN_ID = 8;
 
+        public static final int PIGEON_CAN_ID = 9;
+
+        // Full speed settings
         public static final double MAX_SPEED_IN_MPS = 3.5; // meters per second
         public static final double MAX_ANGULAR_SPEED_IN_RPS = 1.25 * Math.PI; // radians per second
 

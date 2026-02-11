@@ -4,7 +4,6 @@
 
 package frc.robot.subsystems;
 
-import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.SparkBase.ControlType;
@@ -21,7 +20,7 @@ import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import util.Logger;
 
-public class SwerveModule extends SubsystemBase {
+public class SwerveModule {
   private final SparkMax driveMotor;
     private final SparkMax turningMotor;
     
@@ -191,8 +190,10 @@ public SwerveModuleState getState() {
         return moduleName;
     }
 
-  @Override
-  public void periodic() {
-    // This method will be called once per scheduler run
-  }
+    /**
+     * Returns the raw absolute encoder position (for calibration)
+     */
+    public double getRawAbsoluteEncoderPosition() {
+        return turningEncoder.getPosition();
+    }
 }

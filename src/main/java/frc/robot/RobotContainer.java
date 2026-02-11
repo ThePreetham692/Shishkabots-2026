@@ -12,10 +12,14 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
+import frc.robot.commands.AutoAllign;
 import frc.robot.commands.DefaultDriveCommand;
 import frc.robot.commands.EmergencyStopCommand;
 import frc.robot.subsystems.DriveSubsystem;
+import frc.robot.subsystems.LimelightSubsystem;
+import frc.robot.subsystems.ShooterSubsystem;
 import edu.wpi.first.wpilibj2.command.button.JoystickButton;
+import edu.wpi.first.wpilibj2.command.RunCommand;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.XboxController;
 
@@ -27,10 +31,10 @@ import edu.wpi.first.wpilibj.XboxController;
  */
 public class RobotContainer {
   // The robot's subsystems and commands are defined here...
-  
-  // Commented out as Limelight is no longer used
-  // private final LimelightSubsystem limelightSubsystem = new LimelightSubsystem();
+  private final LimelightSubsystem limelightSubsystem = new LimelightSubsystem();
   private final DriveSubsystem driveSubsystem = new DriveSubsystem();
+  // Shooter: Left CAN ID, Right CAN ID | Tower CAN ID | Conveyor CAN ID
+  private final ShooterSubsystem shooterSubsystem = new ShooterSubsystem(11, 9, 12, 13);
 
   // The driver's controllers
   // Primary controller (port 0) is for the main driver
@@ -43,14 +47,12 @@ public class RobotContainer {
   private static final double SHOOTER_DEADBAND = 0.06;
 
   // setup the AutoBuilder with all pathplanner paths in place
-  private  SendableChooser<Command> autoChooser;
+  private SendableChooser<Command> autoChooser = new SendableChooser<>();
 
-  // Commented out as Limelight is no longer used
-  /*
   public LimelightSubsystem getLimelightSubsystem() {
     return limelightSubsystem;
   }
-  */
+
   private double applyDeadband(double value) {
     if (Math.abs(value) < DEADBAND) {
       return 0.0;
@@ -94,7 +96,10 @@ public class RobotContainer {
             () -> getStrafeInput(),   // Left/right
             () -> getRotationInput()  // Rotation
         )
-    ); 
+    );
+
+    // Connect Limelight to robot pose for simulation
+    limelightSubsystem.setRobotPoseSupplier(() -> driveSubsystem.getPose());
   }
 
   /**
@@ -119,7 +124,7 @@ public class RobotContainer {
         .onTrue(new EmergencyStopCommand(driveSubsystem));
 
       // Slow driving mode for primary controller
-    new JoystickButton(driveController, XboxController.Button.kRightBumper.value) 
+    new JoystickButton(driveController, XboxController.Button.kRightBumper.value)
     .whileTrue(
         new DefaultDriveCommand(
             driveSubsystem,
@@ -128,7 +133,16 @@ public class RobotContainer {
             () -> getRotationInput() * 0.45
         )
     );
-    
+
+    // Auto-align to AprilTag using Limelight (A button)
+    new JoystickButton(driveController, XboxController.Button.kA.value)
+        .whileTrue(new AutoAllign(limelightSubsystem, driveSubsystem));
+
+    // Shooter - toggle on/off with B button
+    new JoystickButton(driveController, XboxController.Button.kB.value)
+        .toggleOnTrue(new RunCommand(() -> shooterSubsystem.fineTuneIntake(-0.4), shooterSubsystem)
+            .finallyDo(() -> shooterSubsystem.stop()));
+
   }
 
   /**
@@ -137,7 +151,11 @@ public class RobotContainer {
    * @return the command to run in autonomous
    */
   public Command getAutonomousCommand() {
-    // An example command will be run in autonomous
+    // Return selected auto command, or null if none selected
     return autoChooser.getSelected();
+  }
+
+  public DriveSubsystem getDriveSubsystem() {
+    return driveSubsystem;
   }
 }
