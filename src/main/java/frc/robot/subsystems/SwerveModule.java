@@ -196,4 +196,20 @@ public SwerveModuleState getState() {
     public double getRawAbsoluteEncoderPosition() {
         return turningEncoder.getPosition();
     }
+
+    /**
+     * Returns the applied voltage to the drive motor
+     * Calculated as bus voltage * applied output (duty cycle)
+     */
+    public double getDriveVoltage() {
+        return driveMotor.getBusVoltage() * driveMotor.getAppliedOutput();
+    }
+
+    /**
+     * Returns the applied voltage to the turning motor
+     * Calculated as bus voltage * applied output (duty cycle)
+     */
+    public double getTurningVoltage() {
+        return turningMotor.getBusVoltage() * turningMotor.getAppliedOutput();
+    }
 }

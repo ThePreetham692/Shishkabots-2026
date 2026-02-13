@@ -336,6 +336,16 @@ public class DriveSubsystem extends SubsystemBase {
                 Logger.log("Drive Speed: " + speed + " m/s");
                 Logger.log("Drive Heading: " + getGyroRotation().getDegrees() + "°");
                 Logger.log("Drive Pose: " + getPose().toString());
+
+                // Log voltages for all swerve module motors to SmartDashboard
+                SmartDashboard.putNumber("Swerve/FrontLeft/DriveVoltage", m_frontLeft.getDriveVoltage());
+                SmartDashboard.putNumber("Swerve/FrontLeft/TurnVoltage", m_frontLeft.getTurningVoltage());
+                SmartDashboard.putNumber("Swerve/FrontRight/DriveVoltage", m_frontRight.getDriveVoltage());
+                SmartDashboard.putNumber("Swerve/FrontRight/TurnVoltage", m_frontRight.getTurningVoltage());
+                SmartDashboard.putNumber("Swerve/BackLeft/DriveVoltage", m_backLeft.getDriveVoltage());
+                SmartDashboard.putNumber("Swerve/BackLeft/TurnVoltage", m_backLeft.getTurningVoltage());
+                SmartDashboard.putNumber("Swerve/BackRight/DriveVoltage", m_backRight.getDriveVoltage());
+                SmartDashboard.putNumber("Swerve/BackRight/TurnVoltage", m_backRight.getTurningVoltage());
             } catch (Exception e) {
                 System.err.println("Error updating logs: " + e.getMessage());
             }

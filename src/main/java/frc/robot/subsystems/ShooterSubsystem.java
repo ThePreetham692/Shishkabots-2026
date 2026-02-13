@@ -1,15 +1,20 @@
 package frc.robot.subsystems;
 
+import com.revrobotics.spark.SparkBase.ControlType;
 import com.revrobotics.spark.SparkBase.PersistMode;
 import com.revrobotics.spark.SparkBase.ResetMode;
+import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.config.SparkMaxConfig;
+import com.revrobotics.spark.FeedbackSensor;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
-import com.revrobotics.ColorSensorV3;
 
-import edu.wpi.first.wpilibj.I2C;
-import edu.wpi.first.wpilibj.Timer;
+import edu.wpi.first.math.controller.SimpleMotorFeedforward;
+import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import util.Logger;
 
@@ -17,35 +22,66 @@ import util.Logger;
  * Subsystem for controlling the shooter mechanism (single motor)
  */
 public class ShooterSubsystem extends SubsystemBase {
-    // Shooter states
-    public enum ShooterState {
-        NO_CORAL,           // No coral in shooter, motor stopped
-        READY_TO_INTAKE,    // Motor spinning at intake velocity, waiting for coral
-        CORAL_INSIDE,       // Coral inside shooter, motor stopped
-        SHOOT_CORAL         // Shooting coral, motor at shooting velocity
-    }
+    // Shooter states - commented out as we don't need state management
+    // public enum ShooterState {
+    //     NO_CORAL,           // No coral in shooter, motor stopped
+    //     READY_TO_INTAKE,    // Motor spinning at intake velocity, waiting for coral
+    //     CORAL_INSIDE,       // Coral inside shooter, motor stopped
+    //     SHOOT_CORAL         // Shooting coral, motor at shooting velocity
+    // }
 
     private final SparkMax shooterMotorLeft;
     private final SparkMax shooterMotorRight;
     private final SparkMax towerMotor;
     private final SparkMax conveyorMotor;
-    private static final double TOWER_POWER = 0.9; // 90% positive direction
+
+    // Closed loop controllers for PID velocity control
+    private final SparkClosedLoopController leftClosedLoop;
+    private final SparkClosedLoopController rightClosedLoop;
+
+    private static final double TOWER_POWER = 0.8; // 80% power
     private static final double CONVEYOR_POWER = 0.4; // 40% positive direction
 
-    // Color sensor for game piece detection
-    private ColorSensorV3 colorSensor;
-    private static final int PROXIMITY_THRESHOLD = 100; // Adjust based on testing
-    private int lastProximity = 0;
-    private boolean hasColorSensor = false;
+    // PID constants for shooter velocity control - aggressive tuning for faster response
+    private static final double SHOOTER_P = 0.02;
+    private static final double SHOOTER_I = 0.0;
+    private static final double SHOOTER_D = 0.001;
+    private static final double SHOOTER_FF = 0.00019; // Feedforward for SparkMax built-in
 
-    // State management
-    private ShooterState currentState = ShooterState.NO_CORAL;
-    private final Timer stateTimer = new Timer();
-    private static final double INTAKE_TIMEOUT = 10; // seconds to wait for coral to be fully inside
+    // WPILib SimpleMotorFeedforward for proper feedforward control
+    // Aggressive tuning for faster spin-up and higher velocity
+    private static final double FF_kS = 0.2;     // Static friction (volts) - higher for faster startup
+    private static final double FF_kV = 0.118;   // Velocity gain - slightly lower to allow higher speeds
+    private static final double FF_kA = 0.01;    // Acceleration gain for faster spin-up
+    private final SimpleMotorFeedforward feedforward = new SimpleMotorFeedforward(FF_kS, FF_kV, FF_kA);
+
+    // Shooter wheel configuration
+    private static final double WHEEL_DIAMETER_INCHES = 4.0;
+    private static final double WHEEL_RADIUS_METERS = Units.inchesToMeters(WHEEL_DIAMETER_INCHES / 2.0);
+
+    // Soft limits for safety (RPM)
+    private static final double MAX_VELOCITY_RPM = 6000;
+    private static final double MIN_VELOCITY_RPM = 0;
+
+    // Target velocity for shooter (RPM)
+    private static final double SHOOTING_VELOCITY_RPM = 5500;
+    private static final double INTAKE_VELOCITY_RPM = 2000;
+    private double targetVelocity = 0;
+
+    // Color sensor for game piece detection
+    // private ColorSensorV3 colorSensor;
+    // private static final int PROXIMITY_THRESHOLD = 100; // Adjust based on testing
+    // private int lastProximity = 0;
+    // private boolean hasColorSensor = false;
+
+    // State management - commented out as we don't need state management
+    // private ShooterState currentState = ShooterState.NO_CORAL;
+    // private final Timer stateTimer = new Timer();
+    // private static final double INTAKE_TIMEOUT = 10; // seconds to wait for coral to be fully inside
 
     // Motor configuration constants
-    private static final double L4_SHOOTING_POWER = 0.85;
-    private static final double SHOOTING_POWER = 0.85;
+    private static final double L4_SHOOTING_POWER = 0.95;
+    private static final double SHOOTING_POWER = 0.95;
     private static final double INTAKE_POWER = 0.7;
     private static final int MAX_CURRENT = 40; // Amps
     private static final double SHOOT_DURATION = 2.0; // seconds
@@ -59,23 +95,22 @@ public class ShooterSubsystem extends SubsystemBase {
         towerMotor = new SparkMax(towerCanId, MotorType.kBrushless);
         conveyorMotor = new SparkMax(conveyorCanId, MotorType.kBrushless);
 
-        // Try to initialize color sensor on the I2C port
-        try {
-            colorSensor = new ColorSensorV3(I2C.Port.kOnboard);
-            hasColorSensor = true;
-            Logger.log("Color sensor initialized successfully");
-        } catch (Exception e) {
-            Logger.log("Color sensor not detected, running without game piece detection");
-            hasColorSensor = false;
-        }
+        // Get closed loop controllers for PID control
+        leftClosedLoop = shooterMotorLeft.getClosedLoopController();
+        rightClosedLoop = shooterMotorRight.getClosedLoopController();
 
-        // Configure shooter left motor
+        // Configure shooter left motor with PID
         SparkMaxConfig shooterLeftConfig = new SparkMaxConfig();
         shooterLeftConfig
             .idleMode(IdleMode.kCoast)
-            .inverted(true)
-            .smartCurrentLimit(MAX_CURRENT)
-            .openLoopRampRate(0.05);
+            .inverted(false)
+            .smartCurrentLimit(50)  // Higher current for more power
+            .voltageCompensation(12.0);
+        shooterLeftConfig.closedLoop
+            .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
+            .pid(SHOOTER_P, SHOOTER_I, SHOOTER_D)
+            .velocityFF(SHOOTER_FF)
+            .outputRange(-1, 1);
 
         shooterMotorLeft.configure(
             shooterLeftConfig,
@@ -83,13 +118,18 @@ public class ShooterSubsystem extends SubsystemBase {
             PersistMode.kPersistParameters
         );
 
-        // Configure shooter right motor (inverted)
+        // Configure shooter right motor with PID
         SparkMaxConfig shooterRightConfig = new SparkMaxConfig();
         shooterRightConfig
             .idleMode(IdleMode.kCoast)
-            .inverted(false)
-            .smartCurrentLimit(MAX_CURRENT)
-            .openLoopRampRate(0.05);
+            .inverted(true)
+            .smartCurrentLimit(50)  // Higher current for more power
+            .voltageCompensation(12.0);
+        shooterRightConfig.closedLoop
+            .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
+            .pid(SHOOTER_P, SHOOTER_I, SHOOTER_D)
+            .velocityFF(SHOOTER_FF)
+            .outputRange(-1, 1);
 
         shooterMotorRight.configure(
             shooterRightConfig,
@@ -128,36 +168,36 @@ public class ShooterSubsystem extends SubsystemBase {
         // Initialize motors stopped
         stopMotor();
 
-        Logger.log("Shooter subsystem initialized in " + currentState + " state");
+        Logger.log("Shooter subsystem initialized");
     }
 
-    /**
-     * Prepare the shooter to intake a coral
-     */
-    public void prepareForIntake() {
-        if (currentState == ShooterState.NO_CORAL) {
-            Logger.log("Preparing shooter for intake");
-            setMotorPower(INTAKE_POWER);
-            currentState = ShooterState.READY_TO_INTAKE;
-            stateTimer.reset();
-            stateTimer.start();
-        }
-    }
+    // /**
+    //  * Prepare the shooter to intake a coral
+    //  */
+    // public void prepareForIntake() {
+    //     if (currentState == ShooterState.NO_CORAL) {
+    //         Logger.log("Preparing shooter for intake");
+    //         setMotorPower(INTAKE_POWER);
+    //         currentState = ShooterState.READY_TO_INTAKE;
+    //         stateTimer.reset();
+    //         stateTimer.start();
+    //     }
+    // }
 
-    /**
-     * Shoot the coral if one is inside the shooter
-     */
-    public void shootCoral() {
-        if (currentState == ShooterState.CORAL_INSIDE) {
-            Logger.log("Shooting coral");
-            setMotorPower(SHOOTING_POWER);
-            currentState = ShooterState.SHOOT_CORAL;
-            stateTimer.reset();
-            stateTimer.start();
-        } else {
-            Logger.log("Cannot shoot - no coral inside shooter");
-        }
-    }
+    // /**
+    //  * Shoot the coral if one is inside the shooter
+    //  */
+    // public void shootCoral() {
+    //     if (currentState == ShooterState.CORAL_INSIDE) {
+    //         Logger.log("Shooting coral");
+    //         setMotorPower(SHOOTING_POWER);
+    //         currentState = ShooterState.SHOOT_CORAL;
+    //         stateTimer.reset();
+    //         stateTimer.start();
+    //     } else {
+    //         Logger.log("Cannot shoot - no coral inside shooter");
+    //     }
+    // }
 
     /**
      * Fine-tune the shooter intake at a slower speed
@@ -169,41 +209,40 @@ public class ShooterSubsystem extends SubsystemBase {
         // Don't change the state - this can be called from multiple states
     }
 
-    public void shootHighestLevelCoral() {
-        if (currentState == ShooterState.CORAL_INSIDE) {
-            Logger.log("Shooting coral to highest level");
-            shooterMotorLeft.set(L4_SHOOTING_POWER);
-            shooterMotorRight.set(L4_SHOOTING_POWER);
-            towerMotor.set(TOWER_POWER);
-            conveyorMotor.set(CONVEYOR_POWER);
-            stateTimer.reset();
-            stateTimer.start();
-        } else {
-            Logger.log("Cannot shoot - no coral inside shooter");
-        }
-    }
+    // public void shootHighestLevelCoral() {
+    //     if (currentState == ShooterState.CORAL_INSIDE) {
+    //         Logger.log("Shooting coral to highest level");
+    //         shooterMotorLeft.set(L4_SHOOTING_POWER);
+    //         shooterMotorRight.set(L4_SHOOTING_POWER);
+    //         towerMotor.set(TOWER_POWER);
+    //         conveyorMotor.set(CONVEYOR_POWER);
+    //         stateTimer.reset();
+    //         stateTimer.start();
+    //     } else {
+    //         Logger.log("Cannot shoot - no coral inside shooter");
+    //     }
+    // }
 
-    public void shootBottomLevelCoral() {
-        if (currentState == ShooterState.CORAL_INSIDE) {
-            Logger.log("Shooting coral to bottom level");
-            shooterMotorLeft.set(SHOOTING_POWER - 0.1);
-            shooterMotorRight.set(SHOOTING_POWER - 0.1);
-            towerMotor.set(TOWER_POWER);
-            conveyorMotor.set(CONVEYOR_POWER);
-            stateTimer.reset();
-            stateTimer.start();
-        } else {
-            Logger.log("Cannot shoot - no coral inside shooter");
-        }
-    }
+    // public void shootBottomLevelCoral() {
+    //     if (currentState == ShooterState.CORAL_INSIDE) {
+    //         Logger.log("Shooting coral to bottom level");
+    //         shooterMotorLeft.set(SHOOTING_POWER - 0.1);
+    //         shooterMotorRight.set(SHOOTING_POWER - 0.1);
+    //         towerMotor.set(TOWER_POWER);
+    //         conveyorMotor.set(CONVEYOR_POWER);
+    //         stateTimer.reset();
+    //         stateTimer.start();
+    //     } else {
+    //         Logger.log("Cannot shoot - no coral inside shooter");
+    //     }
+    // }
 
     /**
      * Emergency stop for the shooter
      */
     public void emergencyStop() {
         stopMotor();
-        currentState = ShooterState.NO_CORAL;
-        Logger.log("Emergency stop triggered - shooter reset to NO_CORAL state");
+        Logger.log("Emergency stop triggered");
     }
 
     /**
@@ -242,22 +281,24 @@ public class ShooterSubsystem extends SubsystemBase {
      * @return true if a game piece is detected at the entry of the shooter, false if no sensor
      */
     public boolean hasGamePieceEntered() {
-        if (!hasColorSensor) {
-            return false;
-        }
+        // Color sensor disabled
+        return false;
+        // if (!hasColorSensor) {
+        //     return false;
+        // }
 
-        int proximity = colorSensor.getProximity();
-        boolean isClose = proximity > PROXIMITY_THRESHOLD;
+        // int proximity = colorSensor.getProximity();
+        // boolean isClose = proximity > PROXIMITY_THRESHOLD;
 
-        // If we detect a sudden increase in proximity, a game piece likely entered
-        if (isClose && lastProximity <= PROXIMITY_THRESHOLD) {
-            var detectedColor = colorSensor.getColor();
-            Logger.log(String.format("Coral detected! Color: R=%.2f, G=%.2f, B=%.2f, Proximity=%d",
-                detectedColor.red, detectedColor.green, detectedColor.blue, proximity));
-        }
+        // // If we detect a sudden increase in proximity, a game piece likely entered
+        // if (isClose && lastProximity <= PROXIMITY_THRESHOLD) {
+        //     var detectedColor = colorSensor.getColor();
+        //     Logger.log(String.format("Coral detected! Color: R=%.2f, G=%.2f, B=%.2f, Proximity=%d",
+        //         detectedColor.red, detectedColor.green, detectedColor.blue, proximity));
+        // }
 
-        lastProximity = proximity;
-        return isClose;
+        // lastProximity = proximity;
+        // return isClose;
     }
 
     /**
@@ -265,62 +306,33 @@ public class ShooterSubsystem extends SubsystemBase {
      * @return true if a game piece is detected leaving the shooter, false if no sensor
      */
     public boolean hasGamePieceExited() {
-        if (!hasColorSensor) {
-            return false;
-        }
+        // Color sensor disabled
+        return false;
+        // if (!hasColorSensor) {
+        //     return false;
+        // }
 
-        int proximity = colorSensor.getProximity();
-        boolean hasExited = lastProximity > PROXIMITY_THRESHOLD && proximity <= PROXIMITY_THRESHOLD;
-        Logger.log("proximity sensor value = " + proximity + " hasExited = " + hasExited);
-        if (hasExited) {
-            Logger.log("Coral has exited the shooter");
-        }
+        // int proximity = colorSensor.getProximity();
+        // boolean hasExited = lastProximity > PROXIMITY_THRESHOLD && proximity <= PROXIMITY_THRESHOLD;
+        // Logger.log("proximity sensor value = " + proximity + " hasExited = " + hasExited);
+        // if (hasExited) {
+        //     Logger.log("Coral has exited the shooter");
+        // }
 
-        lastProximity = proximity;
-        return hasExited;
+        // lastProximity = proximity;
+        // return hasExited;
     }
 
-    /**
-     * Get the current state of the shooter
-     * @return Current shooter state
-     */
-    public ShooterState getState() {
-        return currentState;
-    }
+    // /**
+    //  * Get the current state of the shooter
+    //  * @return Current shooter state
+    //  */
+    // public ShooterState getState() {
+    //     return currentState;
+    // }
 
     @Override
     public void periodic() {
-        // Handle state transitions based on current state
-        switch (currentState) {
-            case READY_TO_INTAKE:
-                // Check if coral has entered shooter
-                if (hasGamePieceEntered() || stateTimer.get() > INTAKE_TIMEOUT) {
-                    Logger.log("Coral detected or timeout reached - stopping motor");
-                    stopMotor();
-                    currentState = ShooterState.CORAL_INSIDE;
-                    stateTimer.stop();
-                }
-                break;
-
-            case SHOOT_CORAL:
-                // Check if shooting time is complete
-                if (stateTimer.get() >= SHOOT_DURATION) {
-                    Logger.log("Shooting complete - stopping motor");
-                    stopMotor();
-                    currentState = ShooterState.NO_CORAL;
-                    stateTimer.stop();
-                }
-                break;
-
-            case CORAL_INSIDE:
-                // Just waiting for shoot command
-                break;
-
-            case NO_CORAL:
-                // Just waiting for prepare command
-                break;
-        }
-
         // Update telemetry
         if (periodicCounter++ % 50 == 0) {
             updateTelemetry();
@@ -328,33 +340,154 @@ public class ShooterSubsystem extends SubsystemBase {
     }
 
     private void updateTelemetry() {
-        // Motor telemetry
-        Logger.log("Shooter Left Motor - Velocity: " + shooterMotorLeft.getEncoder().getVelocity() +
-                  ", Current: " + shooterMotorLeft.getOutputCurrent() +
-                  ", Power: " + shooterMotorLeft.get());
-        Logger.log("Shooter Right Motor - Velocity: " + shooterMotorRight.getEncoder().getVelocity() +
-                  ", Current: " + shooterMotorRight.getOutputCurrent() +
-                  ", Power: " + shooterMotorRight.get());
-        Logger.log("Tower Motor - Velocity: " + towerMotor.getEncoder().getVelocity() +
-                  ", Power: " + towerMotor.get());
-        Logger.log("Conveyor Motor - Velocity: " + conveyorMotor.getEncoder().getVelocity() +
-                  ", Power: " + conveyorMotor.get());
+        // Calculate voltages
+        double shooterLeftVoltage = shooterMotorLeft.getBusVoltage() * shooterMotorLeft.getAppliedOutput();
+        double shooterRightVoltage = shooterMotorRight.getBusVoltage() * shooterMotorRight.getAppliedOutput();
+        double towerVoltage = towerMotor.getBusVoltage() * towerMotor.getAppliedOutput();
+        double conveyorVoltage = conveyorMotor.getBusVoltage() * conveyorMotor.getAppliedOutput();
 
-        // State telemetry
-        Logger.log("Shooter State: " + currentState.toString() +
-                  ", State Timer: " + stateTimer.get() +
-                  ", Target Power: " + (currentState == ShooterState.SHOOT_CORAL ? SHOOTING_POWER :
-                                       currentState == ShooterState.READY_TO_INTAKE ? INTAKE_POWER : 0));
+        // Get velocities
+        double leftVelocity = shooterMotorLeft.getEncoder().getVelocity();
+        double rightVelocity = shooterMotorRight.getEncoder().getVelocity();
 
-        // Color sensor telemetry (only if sensor is present)
-        if (hasColorSensor) {
-            var color = colorSensor.getColor();
-            int proximity = colorSensor.getProximity();
-            Logger.log("Shooter Color Sensor - R: " + color.red +
-                      ", G: " + color.green +
-                      ", B: " + color.blue +
-                      ", Proximity: " + proximity);
-        }
-        Logger.log("Coral Present: " + (currentState == ShooterState.CORAL_INSIDE));
+        // Send to SmartDashboard (visible in Shuffleboard)
+        SmartDashboard.putNumber("Shooter/LeftVoltage", shooterLeftVoltage);
+        SmartDashboard.putNumber("Shooter/RightVoltage", shooterRightVoltage);
+        SmartDashboard.putNumber("Shooter/TowerVoltage", towerVoltage);
+        SmartDashboard.putNumber("Shooter/ConveyorVoltage", conveyorVoltage);
+        SmartDashboard.putNumber("Shooter/LeftCurrent", shooterMotorLeft.getOutputCurrent());
+        SmartDashboard.putNumber("Shooter/RightCurrent", shooterMotorRight.getOutputCurrent());
+
+        // PID telemetry - velocity tracking
+        SmartDashboard.putNumber("Shooter/TargetVelocityRPM", targetVelocity);
+        SmartDashboard.putNumber("Shooter/LeftVelocityRPM", leftVelocity);
+        SmartDashboard.putNumber("Shooter/RightVelocityRPM", rightVelocity);
+        SmartDashboard.putNumber("Shooter/VelocityErrorRPM", targetVelocity - getShooterVelocity());
+
+        // Tangential velocity (exit speed of game piece)
+        SmartDashboard.putNumber("Shooter/TangentialVelocityMPS", getTangentialVelocityMPS());
+        SmartDashboard.putNumber("Shooter/TangentialVelocityFPS", getTangentialVelocityMPS() * 3.281); // Convert to ft/s
+    }
+
+    /**
+     * Set shooter power directly (open-loop control)
+     * @param power Power level (-1.0 to 1.0)
+     */
+    public void setShooterPower(double power) {
+        Logger.log("Setting shooter power to " + power);
+        shooterMotorLeft.set(power);
+        shooterMotorRight.set(power);
+        towerMotor.set(TOWER_POWER);
+        conveyorMotor.set(CONVEYOR_POWER);
+    }
+
+    /**
+     * Set shooter velocity using PID control
+     * @param velocityRPM Target velocity in RPM
+     */
+    public void setShooterVelocity(double velocityRPM) {
+        targetVelocity = velocityRPM;
+        Logger.log("Setting shooter velocity to " + velocityRPM + " RPM");
+        leftClosedLoop.setReference(velocityRPM, ControlType.kVelocity);
+        rightClosedLoop.setReference(velocityRPM, ControlType.kVelocity);
+        towerMotor.set(TOWER_POWER);
+        conveyorMotor.set(CONVEYOR_POWER);
+    }
+
+    /**
+     * Run shooter at shooting speed using PID
+     */
+    public void shootWithPID() {
+        setShooterVelocity(SHOOTING_VELOCITY_RPM);
+    }
+
+    /**
+     * Run shooter at intake speed using PID
+     */
+    public void intakeWithPID() {
+        setShooterVelocity(-INTAKE_VELOCITY_RPM);
+    }
+
+    /**
+     * Get the current shooter velocity (average of both motors)
+     * @return Current velocity in RPM
+     */
+    public double getShooterVelocity() {
+        double leftVel = shooterMotorLeft.getEncoder().getVelocity();
+        double rightVel = shooterMotorRight.getEncoder().getVelocity();
+        return (leftVel + rightVel) / 2.0;
+    }
+
+    /**
+     * Check if shooter is at target velocity (within tolerance)
+     * @param toleranceRPM Acceptable error in RPM
+     * @return true if at target velocity
+     */
+    public boolean isAtTargetVelocity(double toleranceRPM) {
+        return Math.abs(getShooterVelocity() - targetVelocity) < toleranceRPM;
+    }
+
+    /**
+     * Set shooter velocity using WPILib SimpleMotorFeedforward
+     * Uses proper feedforward model: voltage = kS * sign(velocity) + kV * velocity
+     * @param velocityRPM Target velocity in RPM
+     */
+    public void setShooterVelocityFF(double velocityRPM) {
+        // Apply soft limits
+        velocityRPM = Math.max(-MAX_VELOCITY_RPM, Math.min(MAX_VELOCITY_RPM, velocityRPM));
+        targetVelocity = velocityRPM;
+
+        // Convert RPM to rotations per second for SimpleMotorFeedforward
+        double velocityRotPerSec = velocityRPM / 60.0;
+
+        // Calculate feedforward voltage using WPILib SimpleMotorFeedforward
+        // Then convert to duty cycle (divide by 12V nominal)
+        double ffVoltage = feedforward.calculate(velocityRotPerSec);
+        double dutyCycle = ffVoltage / 12.0;
+
+        // Clamp output to valid range
+        dutyCycle = Math.max(-1.0, Math.min(1.0, dutyCycle));
+
+        Logger.log("Shooter FF: target=" + velocityRPM + " RPM, voltage=" +
+                   String.format("%.2f", ffVoltage) + "V, duty=" + String.format("%.2f", dutyCycle));
+        shooterMotorLeft.set(dutyCycle);
+        shooterMotorRight.set(dutyCycle);
+        towerMotor.set(TOWER_POWER);
+        conveyorMotor.set(CONVEYOR_POWER);
+    }
+
+    /**
+     * Get the tangential velocity at the wheel surface (exit speed of game piece)
+     * @return Linear velocity in meters per second
+     */
+    public double getTangentialVelocityMPS() {
+        // Convert RPM to radians per second, then multiply by wheel radius
+        double radiansPerSecond = Units.rotationsPerMinuteToRadiansPerSecond(getShooterVelocity());
+        return radiansPerSecond * WHEEL_RADIUS_METERS;
+    }
+
+    /**
+     * Command to set shooter to a specific velocity
+     * @param velocityRPM Target velocity in RPM
+     * @return Command that runs the shooter at the specified velocity
+     */
+    public Command setSpeedCommand(double velocityRPM) {
+        return Commands.run(() -> setShooterVelocityFF(velocityRPM), this);
+    }
+
+    /**
+     * Command to spin up the shooter to shooting speed
+     * @return Command that spins up the shooter
+     */
+    public Command spinUpCommand() {
+        return setSpeedCommand(SHOOTING_VELOCITY_RPM);
+    }
+
+    /**
+     * Command to stop the shooter
+     * @return Command that stops the shooter
+     */
+    public Command stopCommand() {
+        return Commands.runOnce(() -> stop(), this);
     }
 }

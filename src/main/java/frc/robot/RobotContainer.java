@@ -138,9 +138,9 @@ public class RobotContainer {
     new JoystickButton(driveController, XboxController.Button.kA.value)
         .whileTrue(new AutoAllign(limelightSubsystem, driveSubsystem));
 
-    // Shooter - toggle on/off with B button
+    // Shooter - toggle on/off with B button (feedforward control at 5000 RPM)
     new JoystickButton(driveController, XboxController.Button.kB.value)
-        .toggleOnTrue(new RunCommand(() -> shooterSubsystem.fineTuneIntake(-0.4), shooterSubsystem)
+        .toggleOnTrue(new RunCommand(() -> shooterSubsystem.setShooterVelocityFF(5000), shooterSubsystem)
             .finallyDo(() -> shooterSubsystem.stop()));
 
   }

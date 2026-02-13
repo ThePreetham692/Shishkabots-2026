@@ -41,7 +41,7 @@ public class Logger {
      * @param message The message to log
      */
     public static void log(String message) {
-        // System.out.println(message);
+        System.out.println(message);
         if (logEntry != null) {
             logEntry.append(message);
         }
