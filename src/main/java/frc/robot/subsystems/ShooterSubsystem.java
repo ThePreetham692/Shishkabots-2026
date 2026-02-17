@@ -40,7 +40,7 @@ public class ShooterSubsystem extends SubsystemBase {
     private final SparkClosedLoopController rightClosedLoop;
 
     private static final double TOWER_POWER = 0.8; // 80% power
-    private static final double CONVEYOR_POWER = 0.4; // 40% positive direction
+    private static final double CONVEYOR_POWER = 0.1; // 10% positive direction
 
     // PID constants for shooter velocity control - aggressive tuning for faster response
     private static final double SHOOTER_P = 0.02;
@@ -63,6 +63,7 @@ public class ShooterSubsystem extends SubsystemBase {
     private static final double MAX_VELOCITY_RPM = 6000;
     private static final double MIN_VELOCITY_RPM = 0;
 
+
     // Target velocity for shooter (RPM)
     private static final double SHOOTING_VELOCITY_RPM = 5500;
     private static final double INTAKE_VELOCITY_RPM = 2000;
@@ -80,8 +81,8 @@ public class ShooterSubsystem extends SubsystemBase {
     // private static final double INTAKE_TIMEOUT = 10; // seconds to wait for coral to be fully inside
 
     // Motor configuration constants
-    private static final double L4_SHOOTING_POWER = 0.95;
-    private static final double SHOOTING_POWER = 0.95;
+    private static final double L4_SHOOTING_POWER = 0.85;
+    private static final double SHOOTING_POWER = 0.85;
     private static final double INTAKE_POWER = 0.7;
     private static final int MAX_CURRENT = 40; // Amps
     private static final double SHOOT_DURATION = 2.0; // seconds
