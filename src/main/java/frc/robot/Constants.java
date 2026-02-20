@@ -88,9 +88,9 @@ public final class Constants {
 
         public static final int PIGEON_CAN_ID = 9;
 
-        // Full speed settings
-        public static final double MAX_SPEED_IN_MPS = 3.5; // meters per second
-        public static final double MAX_ANGULAR_SPEED_IN_RPS = 1.25 * Math.PI; // radians per second
+        // Full speed settings (CA26 uses 14.5 ft/s = 4.42 m/s)
+        public static final double MAX_SPEED_IN_MPS = 4.5; // meters per second
+        public static final double MAX_ANGULAR_SPEED_IN_RPS = 1.5 * Math.PI; // radians per second
 
         public static final double MAX_DIRECTION_SLEW_RATE_RPS = 1.3; // radians per second
         public static final double MAX_MAGNITUDE_SLEW_RATE = 1.8; // percent per second (1 = 100%)
@@ -98,8 +98,8 @@ public final class Constants {
 
     }
 public static final class ModuleConstants {
-        // Wheel Diameter (estimated in meters)
-        public static final double WHEEL_DIAMETER = 0.0672;
+        // Wheel Diameter - MAXSwerve uses 3 inch wheels (0.0762m)
+        public static final double WHEEL_DIAMETER = 0.0762;
 
         // The MAXSwerve module can be configured with one of three pinion gears: 12T, 13T, or 14T.
         // This changes the drive speed of the module (a pinion gear with more teeth will result in a

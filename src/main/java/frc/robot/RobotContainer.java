@@ -43,8 +43,9 @@ public class RobotContainer {
   private final XboxController driveController = new XboxController(0); // Primary controller on port 0
   private final XboxController mechanismController = new XboxController(1); // Secondary controller on port 1
 
-  private static final double DEADBAND = 0.095;
+  private static final double DEADBAND = 0.1;
   private static final double SHOOTER_DEADBAND = 0.06;
+  private static final double ROTATION_MULTIPLIER = 0.7; // Rotation is 70% of translation speed
 
   // setup the AutoBuilder with all pathplanner paths in place
   private SendableChooser<Command> autoChooser = new SendableChooser<>();
@@ -53,6 +54,23 @@ public class RobotContainer {
     return limelightSubsystem;
   }
 
+  /**
+   * Apply deadband and square the input for smoother control
+   * Squaring preserves the sign but gives more precision at low speeds
+   */
+  private double applyDeadbandAndCurve(double value) {
+    if (Math.abs(value) < DEADBAND) {
+      return 0.0;
+    }
+    // Remove deadband from the range, then square for smoother curve
+    double sign = Math.signum(value);
+    double adjusted = (Math.abs(value) - DEADBAND) / (1.0 - DEADBAND);
+    return sign * adjusted * adjusted; // Squared input for fine control
+  }
+
+  /**
+   * Apply deadband without curve (linear response)
+   */
   private double applyDeadband(double value) {
     if (Math.abs(value) < DEADBAND) {
       return 0.0;
@@ -61,21 +79,19 @@ public class RobotContainer {
   }
 
   private double getForwardInput() {
-    // Use primary controller input, but if it's not moving, check secondary
     double primaryInput = -driveController.getLeftY();
-    return applyDeadband(primaryInput);
+    return applyDeadbandAndCurve(primaryInput);
   }
 
   private double getStrafeInput() {
-    // Use primary controller input, but if it's not moving, check secondary
     double primaryInput = -driveController.getLeftX();
-    return applyDeadband(primaryInput);
+    return applyDeadbandAndCurve(primaryInput);
   }
 
   private double getRotationInput() {
-    // Use primary controller input, but if it's not moving, check secondary
     double primaryInput = -driveController.getRightX();
-    return applyDeadband(primaryInput);
+    // Rotation uses curve + reduced sensitivity for precision turning
+    return applyDeadbandAndCurve(primaryInput) * ROTATION_MULTIPLIER;
   }
 
   
@@ -88,13 +104,13 @@ public class RobotContainer {
   public RobotContainer() {
     // Configure the trigger bindings
     configureBindings();
-     // Set up the default command for the drive subsystem
+     // Set up the default command for the drive subsystem (60% speed default)
     driveSubsystem.setDefaultCommand(
         new DefaultDriveCommand(
             driveSubsystem,
-            () -> getForwardInput(),  // Forward/backward
-            () -> getStrafeInput(),   // Left/right
-            () -> getRotationInput()  // Rotation
+            () -> getForwardInput() * 0.6,  // Forward/backward
+            () -> getStrafeInput() * 0.6,   // Left/right
+            () -> getRotationInput() * 0.6  // Rotation
         )
     );
 
@@ -142,6 +158,38 @@ public class RobotContainer {
     new JoystickButton(driveController, XboxController.Button.kB.value)
         .toggleOnTrue(new RunCommand(() -> shooterSubsystem.setShooterVelocityFF(5000), shooterSubsystem)
             .finallyDo(() -> shooterSubsystem.stop()));
+
+    // ==================== WHEEL TEST BUTTONS ====================
+    // X button: Test drive motors (hold to spin wheels at 20% power)
+    new JoystickButton(driveController, XboxController.Button.kX.value)
+        .whileTrue(new RunCommand(() -> driveSubsystem.testDriveMotors(0.2), driveSubsystem)
+            .finallyDo(() -> driveSubsystem.stop()));
+
+    // Y button: Test turning motors (hold to rotate wheels at 20% power)
+    new JoystickButton(driveController, XboxController.Button.kY.value)
+        .whileTrue(new RunCommand(() -> driveSubsystem.testTurningMotors(0.2), driveSubsystem)
+            .finallyDo(() -> driveSubsystem.stop()));
+
+    // Left bumper: Point all wheels forward (0 degrees)
+    new JoystickButton(driveController, XboxController.Button.kLeftBumper.value)
+        .whileTrue(new RunCommand(() -> driveSubsystem.setAllWheelAngles(0), driveSubsystem)
+            .finallyDo(() -> driveSubsystem.stop()));
+
+    // RT (Right Trigger): Sprint mode - full speed (4.5 m/s)
+    new Trigger(() -> driveController.getRightTriggerAxis() > 0.5)
+        .whileTrue(new DefaultDriveCommand(
+            driveSubsystem,
+            () -> getForwardInput() * 1.67,  // 1.67 * 0.6 = 1.0 (full speed)
+            () -> getStrafeInput() * 1.67,
+            () -> getRotationInput() * 1.43   // Slightly faster rotation in sprint
+        ));
+
+    // Start button: Reset gyro (resets field-relative forward direction)
+    new JoystickButton(driveController, XboxController.Button.kStart.value)
+        .onTrue(new RunCommand(() -> {
+            driveSubsystem.zeroHeading();
+            System.out.println("Gyro reset - current heading is now forward");
+        }, driveSubsystem).withTimeout(0.1));
 
   }
 

@@ -164,9 +164,18 @@ public class DriveSubsystem extends SubsystemBase {
      * @param rot Angular rate of the robot.
      */
     public void drive(double xSpeed, double ySpeed, double rot) {
-        // Log input values using Logger instead of SmartDashboard to reduce network traffic
-        Logger.log("Drive Input - X: " + xSpeed + ", Y: " + ySpeed + ", Rot: " + rot);
+        drive(xSpeed, ySpeed, rot, true); // Default to field-relative
+    }
 
+    /**
+     * Method to drive the robot using joystick info.
+     *
+     * @param xSpeed Speed of the robot in the x direction (forward).
+     * @param ySpeed Speed of the robot in the y direction (sideways).
+     * @param rot Angular rate of the robot.
+     * @param fieldRelative Whether to use field-relative driving.
+     */
+    public void drive(double xSpeed, double ySpeed, double rot, boolean fieldRelative) {
         // If all inputs are zero, stop the motors
         if (Math.abs(xSpeed) < 1E-6 && Math.abs(ySpeed) < 1E-6 && Math.abs(rot) < 1E-6) {
             stop();
@@ -178,45 +187,23 @@ public class DriveSubsystem extends SubsystemBase {
         ySpeed = ySpeed * DriveConstants.MAX_SPEED_IN_MPS;
         rot = rot * DriveConstants.MAX_ANGULAR_SPEED_IN_RPS;
 
-        /*if (!RobotState.isAutonomous()) {
-            // Apply slew rate limiters to smooth out the inputs
-            xSpeed = m_xSpeedLimiter.calculate(xSpeed);
-            ySpeed = m_ySpeedLimiter.calculate(ySpeed);
-            
-            // If changing rotation direction, use a higher slew rate or bypass
-            double currentRot = m_rotLimiter.calculate(0); // Get current value without changing it
-            if (currentRot * rot < 0) { // If signs are different (changing direction)
-                rot = rot * 0.8; // Apply directly with slight reduction
-            } else {
-                rot = m_rotLimiter.calculate(rot); // Normal slew rate
-            }
-        } */
+        // Create chassis speeds - field relative or robot relative
+        ChassisSpeeds speeds;
+        if (fieldRelative) {
+            speeds = ChassisSpeeds.fromFieldRelativeSpeeds(xSpeed, ySpeed, rot, getGyroRotation());
+        } else {
+            speeds = new ChassisSpeeds(xSpeed, ySpeed, rot);
+        }
 
-        ChassisSpeeds speeds = new ChassisSpeeds(xSpeed, ySpeed, rot);
+        // Calculate and apply module states
         var swerveModuleStates = kinematics.toSwerveModuleStates(speeds);
-
         SwerveDriveKinematics.desaturateWheelSpeeds(swerveModuleStates, DriveConstants.MAX_SPEED_IN_MPS);
-
-        Logger.log("Chassis Speeds - X: " + speeds.vxMetersPerSecond + 
-                  ", Y: " + speeds.vyMetersPerSecond + 
-                  ", Rotation: " + speeds.omegaRadiansPerSecond);
-
-        // Log detailed turning motor commands
-        Logger.log("Setting module states:");
-        Logger.log("Front Left - Target Speed: " + swerveModuleStates[0].speedMetersPerSecond + 
-                  " m/s, Target Angle: " + swerveModuleStates[0].angle.getDegrees() + "°");
-        Logger.log("Front Right - Target Speed: " + swerveModuleStates[1].speedMetersPerSecond + 
-                  " m/s, Target Angle: " + swerveModuleStates[1].angle.getDegrees() + "°");
-        Logger.log("Back Left - Target Speed: " + swerveModuleStates[2].speedMetersPerSecond + 
-                  " m/s, Target Angle: " + swerveModuleStates[2].angle.getDegrees() + "°");
-        Logger.log("Back Right - Target Speed: " + swerveModuleStates[3].speedMetersPerSecond + 
-                  " m/s, Target Angle: " + swerveModuleStates[3].angle.getDegrees() + "°");
 
         m_frontLeft.setDesiredState(swerveModuleStates[0]);
         m_frontRight.setDesiredState(swerveModuleStates[1]);
         m_backLeft.setDesiredState(swerveModuleStates[2]);
         m_backRight.setDesiredState(swerveModuleStates[3]);
-      }
+    }
     /**
      * Drive using ChassisSpeeds (already in m/s and rad/s units).
      * Used by PathPlanner and autonomous commands.
@@ -296,58 +283,23 @@ public class DriveSubsystem extends SubsystemBase {
                 SmartDashboard.putNumberArray("SwerveModuleStates", loggingState);
 
                 // === CALIBRATION OUTPUT ===
-                // Point all wheels forward manually, then read these values
+                // Point all wheels forward manually, then read these values (in radians)
                 // Copy these values to Constants.java as angular offsets
                 SmartDashboard.putNumber("Calibration/FrontLeft", m_frontLeft.getRawAbsoluteEncoderPosition());
                 SmartDashboard.putNumber("Calibration/FrontRight", m_frontRight.getRawAbsoluteEncoderPosition());
                 SmartDashboard.putNumber("Calibration/BackLeft", m_backLeft.getRawAbsoluteEncoderPosition());
                 SmartDashboard.putNumber("Calibration/BackRight", m_backRight.getRawAbsoluteEncoderPosition());
 
-                // Log detailed turning motor data for each module
-                Logger.log("Turning Motor Debug Data:");
-                Logger.log("Front Left - Angle: " + Math.toDegrees(m_frontLeft.getSteerAngle()) + 
-                          "°, Target: " + Math.toDegrees(m_frontLeft.getDesiredAngle()) + "°");
-                Logger.log("Front Right - Angle: " + Math.toDegrees(m_frontRight.getSteerAngle()) + 
-                          "°, Target: " + Math.toDegrees(m_frontRight.getDesiredAngle()) + "°");
-                Logger.log("Back Left - Angle: " + Math.toDegrees(m_backLeft.getSteerAngle()) + 
-                          "°, Target: " + Math.toDegrees(m_backLeft.getDesiredAngle()) + "°");
-                Logger.log("Back Right - Angle: " + Math.toDegrees(m_backRight.getSteerAngle()) + 
-                          "°, Target: " + Math.toDegrees(m_backRight.getDesiredAngle()) + "°");
-                
-                // Convert odometry data to Logger.log instead of SmartDashboard
-                var pose = getPose();
-                Logger.log("Robot Position - X: " + pose.getX() + 
-                          ", Y: " + pose.getY() + 
-                          ", Rotation: " + pose.getRotation().getDegrees() + "°");
-                Logger.log("Gyro Angle: " + getGyroRotation().getDegrees() + "°");
+                // Show calibration in DEGREES for easier reading
+                SmartDashboard.putNumber("Calibration/FL_Degrees", Math.toDegrees(m_frontLeft.getRawAbsoluteEncoderPosition()));
+                SmartDashboard.putNumber("Calibration/FR_Degrees", Math.toDegrees(m_frontRight.getRawAbsoluteEncoderPosition()));
+                SmartDashboard.putNumber("Calibration/BL_Degrees", Math.toDegrees(m_backLeft.getRawAbsoluteEncoderPosition()));
+                SmartDashboard.putNumber("Calibration/BR_Degrees", Math.toDegrees(m_backRight.getRawAbsoluteEncoderPosition()));
 
-                // Log important values
-                var chassisSpeeds = kinematics.toChassisSpeeds(getModuleStates());
-                double speed = Math.sqrt(
-                    chassisSpeeds.vxMetersPerSecond * chassisSpeeds.vxMetersPerSecond +
-                    chassisSpeeds.vyMetersPerSecond * chassisSpeeds.vyMetersPerSecond
-                );
-
-                // Log to DataLog (saved to file) - keep this as it doesn't affect network traffic
-                m_speedLog.append(speed);
-                m_headingLog.append(getGyroRotation().getDegrees());
-
-                // Convert SmartDashboard logging to Logger.log
-                Logger.log("Drive Speed: " + speed + " m/s");
-                Logger.log("Drive Heading: " + getGyroRotation().getDegrees() + "°");
-                Logger.log("Drive Pose: " + getPose().toString());
-
-                // Log voltages for all swerve module motors to SmartDashboard
-                SmartDashboard.putNumber("Swerve/FrontLeft/DriveVoltage", m_frontLeft.getDriveVoltage());
-                SmartDashboard.putNumber("Swerve/FrontLeft/TurnVoltage", m_frontLeft.getTurningVoltage());
-                SmartDashboard.putNumber("Swerve/FrontRight/DriveVoltage", m_frontRight.getDriveVoltage());
-                SmartDashboard.putNumber("Swerve/FrontRight/TurnVoltage", m_frontRight.getTurningVoltage());
-                SmartDashboard.putNumber("Swerve/BackLeft/DriveVoltage", m_backLeft.getDriveVoltage());
-                SmartDashboard.putNumber("Swerve/BackLeft/TurnVoltage", m_backLeft.getTurningVoltage());
-                SmartDashboard.putNumber("Swerve/BackRight/DriveVoltage", m_backRight.getDriveVoltage());
-                SmartDashboard.putNumber("Swerve/BackRight/TurnVoltage", m_backRight.getTurningVoltage());
+                // Show gyro heading
+                SmartDashboard.putNumber("Drive/Gyro_Degrees", getGyroRotation().getDegrees());
             } catch (Exception e) {
-                System.err.println("Error updating logs: " + e.getMessage());
+                System.err.println("Error updating dashboard: " + e.getMessage());
             }
             updateCounter = 0;
         }
@@ -380,6 +332,14 @@ public class DriveSubsystem extends SubsystemBase {
     public Rotation2d getHeading() {
         return getGyroRotation();
     }
+
+    /**
+     * Resets the gyro to zero. Call this when the robot is facing "forward"
+     * to set the field-relative forward direction.
+     */
+    public void zeroHeading() {
+        m_gyro.reset();
+    }
     
     public Command driveToEndPose(Pose2d endPose) {
         PathConstraints constraints = new PathConstraints(3.0, 3.0, 2 * Math.PI, 4 * Math.PI);
@@ -402,5 +362,42 @@ public class DriveSubsystem extends SubsystemBase {
         double angularVelocityDegrees = angularVelocity * (180 / Math.PI);
         double newYaw = m_gyro.getYaw().getValueAsDouble() +  angularVelocityDegrees * 0.02;
         m_gyro.getSimState().setRawYaw(newYaw);
+    }
+
+    // ==================== WHEEL TEST METHODS ====================
+    // Use these to test individual motors for debugging
+
+    /**
+     * Set all drive motors to the same power (for testing wheels spin)
+     * @param power Power from -1.0 to 1.0
+     */
+    public void testDriveMotors(double power) {
+        m_frontLeft.setDrivePower(power);
+        m_frontRight.setDrivePower(power);
+        m_backLeft.setDrivePower(power);
+        m_backRight.setDrivePower(power);
+    }
+
+    /**
+     * Set all turning motors to the same power (for testing swivel)
+     * @param power Power from -1.0 to 1.0
+     */
+    public void testTurningMotors(double power) {
+        m_frontLeft.setTurningPower(power);
+        m_frontRight.setTurningPower(power);
+        m_backLeft.setTurningPower(power);
+        m_backRight.setTurningPower(power);
+    }
+
+    /**
+     * Set all wheels to point at a specific angle (for testing swivel PID)
+     * @param angleDegrees Target angle in degrees (0 = forward)
+     */
+    public void setAllWheelAngles(double angleDegrees) {
+        double angleRadians = Math.toRadians(angleDegrees);
+        m_frontLeft.setTurningAngle(angleRadians);
+        m_frontRight.setTurningAngle(angleRadians);
+        m_backLeft.setTurningAngle(angleRadians);
+        m_backRight.setTurningAngle(angleRadians);
     }
 }

@@ -97,48 +97,21 @@ public SwerveModuleState getState() {
     }
 
     public void setDesiredState(SwerveModuleState desiredState) {
-        // apply chasis angular offset to the desired state
+        // Apply chassis angular offset to the desired state
         SwerveModuleState correctedDesiredState = new SwerveModuleState();
         correctedDesiredState.speedMetersPerSecond = desiredState.speedMetersPerSecond;
         correctedDesiredState.angle = desiredState.angle.plus(Rotation2d.fromRadians(chasisAngularOffset));
-        
+
         // Optimize the reference state to avoid spinning further than 90 degrees
-        SwerveModuleState originalState = new SwerveModuleState(
-            correctedDesiredState.speedMetersPerSecond,
-            correctedDesiredState.angle
-        );
         correctedDesiredState.optimize(new Rotation2d(turningEncoder.getPosition()));
 
-        // Calculate the drive output from the drive encoder velocity
+        // Store desired values
         desiredSpeed = correctedDesiredState.speedMetersPerSecond;
         desiredAngle = correctedDesiredState.angle.getRadians();
 
-        // Log turning motor details
-        Logger.log(moduleName + " - Current angle: " + Math.toDegrees(getTurningPosition()) + 
-                   "°, Target angle: " + Math.toDegrees(desiredAngle) + "°");
-        Logger.log(moduleName + " - Turning encoder position: " + turningEncoder.getPosition() + 
-                   ", Turning encoder velocity: " + turningEncoder.getVelocity());
-        Logger.log(moduleName + " - Pre-optimized angle: " + Math.toDegrees(originalState.angle.getRadians()) + 
-                   "°, Post-optimized: " + Math.toDegrees(correctedDesiredState.angle.getRadians()) + "°");
-        
-        /* // Add detailed turning motor data to SmartDashboard
-        SmartDashboard.putNumber(moduleName + "/TurningEncoder/Position", turningEncoder.getPosition());
-        SmartDashboard.putNumber(moduleName + "/TurningEncoder/Velocity", turningEncoder.getVelocity());
-        SmartDashboard.putNumber(moduleName + "/TurningMotor/TargetAngle", Math.toDegrees(desiredAngle));
-        SmartDashboard.putNumber(moduleName + "/TurningMotor/CurrentAngle", Math.toDegrees(getTurningPosition()));
-        SmartDashboard.putNumber(moduleName + "/TurningMotor/Error", 
-                                Math.toDegrees(desiredAngle - turningEncoder.getPosition()));
-        SmartDashboard.putNumber(moduleName + "/TurningMotor/AppliedOutput", turningMotor.getAppliedOutput());
-        SmartDashboard.putNumber(moduleName + "/TurningMotor/BusVoltage", turningMotor.getBusVoltage());
-        SmartDashboard.putNumber(moduleName + "/TurningMotor/OutputCurrent", turningMotor.getOutputCurrent()); */
-
-        // PID Controllers sets the velocity and angle pos as a reference to KEEP A CONSISTENT VALUE
+        // Set motor references - drive uses velocity PID, turning uses position PID
         driveClosedLoopController.setReference(desiredSpeed, ControlType.kVelocity);
         turningClosedLoopController.setReference(desiredAngle, ControlType.kPosition);
-        
-        // Log PID controller details
-        Logger.log(moduleName + " - Turning PID Controller - Setting reference to: " + desiredAngle + 
-                   " radians (" + Math.toDegrees(desiredAngle) + "°)");
     }
 
     private double getDriveVelocity() {
@@ -211,5 +184,30 @@ public SwerveModuleState getState() {
      */
     public double getTurningVoltage() {
         return turningMotor.getBusVoltage() * turningMotor.getAppliedOutput();
+    }
+
+    /**
+     * Set drive motor power directly (for testing)
+     * @param power Power from -1.0 to 1.0
+     */
+    public void setDrivePower(double power) {
+        driveMotor.set(power);
+    }
+
+    /**
+     * Set turning motor power directly (for testing)
+     * @param power Power from -1.0 to 1.0
+     */
+    public void setTurningPower(double power) {
+        turningMotor.set(power);
+    }
+
+    /**
+     * Set turning motor to a specific angle using PID (for testing)
+     * @param angleRadians Target angle in radians
+     */
+    public void setTurningAngle(double angleRadians) {
+        double targetWithOffset = angleRadians + chasisAngularOffset;
+        turningClosedLoopController.setReference(targetWithOffset, ControlType.kPosition);
     }
 }
