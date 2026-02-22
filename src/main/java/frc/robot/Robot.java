@@ -87,6 +87,10 @@ public class Robot extends TimedRobot {
     if (m_autonomousCommand != null) {
       m_autonomousCommand.cancel();
     }
+
+    // Zero heading automatically at teleop start so field-relative driving
+    // uses the robot's current forward direction.
+    m_robotContainer.getDriveSubsystem().zeroHeading();
   }
 
   /** This function is called periodically during operator control. */

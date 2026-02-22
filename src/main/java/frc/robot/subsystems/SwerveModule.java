@@ -158,6 +158,10 @@ public SwerveModuleState getState() {
     public double getDesiredAngle() {
         return desiredAngle;
     }
+
+    public double getDesiredSpeed() {
+        return desiredSpeed;
+    }
     
     public String getModuleName() {
         return moduleName;

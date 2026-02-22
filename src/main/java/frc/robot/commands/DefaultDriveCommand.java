@@ -14,6 +14,7 @@ public class DefaultDriveCommand extends Command {
     private final DoubleSupplier xSpeedSupplier;
     private final DoubleSupplier ySpeedSupplier;
     private final DoubleSupplier rotationSupplier;
+    private final boolean fieldRelative;
 
     /**
      * Creates a new DefaultDriveCommand.
@@ -28,10 +29,20 @@ public class DefaultDriveCommand extends Command {
             DoubleSupplier xSpeed,
             DoubleSupplier ySpeed,
             DoubleSupplier rotation) {
+        this(subsystem, xSpeed, ySpeed, rotation, true);
+    }
+
+    public DefaultDriveCommand(
+            DriveSubsystem subsystem,
+            DoubleSupplier xSpeed,
+            DoubleSupplier ySpeed,
+            DoubleSupplier rotation,
+            boolean useFieldRelative) {
         driveSubsystem = subsystem;
         xSpeedSupplier = xSpeed;
         ySpeedSupplier = ySpeed;
         rotationSupplier = rotation;
+        fieldRelative = useFieldRelative;
         addRequirements(subsystem); // ensures command has exclusive use of the drive subsystem.
             }
         /** Creates a new DefaultDriveCommand. */
@@ -48,7 +59,8 @@ public class DefaultDriveCommand extends Command {
     driveSubsystem.drive(
             xSpeedSupplier.getAsDouble(),
             ySpeedSupplier.getAsDouble(),
-            rotationSupplier.getAsDouble());
+            rotationSupplier.getAsDouble(),
+            fieldRelative);
   }
 
   // Called once the command ends or is interrupted.

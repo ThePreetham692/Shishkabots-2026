@@ -39,14 +39,16 @@ public class ShooterSubsystem extends SubsystemBase {
     private final SparkClosedLoopController leftClosedLoop;
     private final SparkClosedLoopController rightClosedLoop;
 
-    private static final double TOWER_POWER = 0.8; // 80% power
-    private static final double CONVEYOR_POWER = 0.1; // 10% positive direction
+    // Feed power into shooter wheels. Lower values reduce "pop-up" at entry and flatten flight path.
+    private static final double TOWER_POWER = 0.65;
+    private static final double CONVEYOR_POWER = 0.08;
 
     // PID constants for shooter velocity control - aggressive tuning for faster response
     private static final double SHOOTER_P = 0.02;
     private static final double SHOOTER_I = 0.0;
     private static final double SHOOTER_D = 0.001;
     private static final double SHOOTER_FF = 0.00019; // Feedforward for SparkMax built-in
+    private static final double SHOOTER_OUTPUT_SCALE = 0.60; // 40% reduction from previous output
 
     // WPILib SimpleMotorFeedforward for proper feedforward control
     // Aggressive tuning for faster spin-up and higher velocity
@@ -65,7 +67,8 @@ public class ShooterSubsystem extends SubsystemBase {
 
 
     // Target velocity for shooter (RPM)
-    private static final double SHOOTING_VELOCITY_RPM = 5500;
+    // Slightly faster wheel speed while keeping feed gentler for a flatter shot.
+    private static final double SHOOTING_VELOCITY_RPM = 5650;
     private static final double INTAKE_VELOCITY_RPM = 2000;
     private double targetVelocity = 0;
 
@@ -251,9 +254,10 @@ public class ShooterSubsystem extends SubsystemBase {
      * @param percentOutput Target percentage output (-1.0 to 1.0)
      */
     private void setMotorPower(double percentOutput) {
-        Logger.log("Setting shooter power to " + percentOutput);
-        shooterMotorLeft.set(percentOutput);
-        shooterMotorRight.set(percentOutput);
+        double scaledOutput = percentOutput * SHOOTER_OUTPUT_SCALE;
+        Logger.log("Setting shooter power to " + scaledOutput + " (scaled)");
+        shooterMotorLeft.set(scaledOutput);
+        shooterMotorRight.set(scaledOutput);
         towerMotor.set(TOWER_POWER);
         conveyorMotor.set(CONVEYOR_POWER);
     }
@@ -375,9 +379,10 @@ public class ShooterSubsystem extends SubsystemBase {
      * @param power Power level (-1.0 to 1.0)
      */
     public void setShooterPower(double power) {
-        Logger.log("Setting shooter power to " + power);
-        shooterMotorLeft.set(power);
-        shooterMotorRight.set(power);
+        double scaledPower = power * SHOOTER_OUTPUT_SCALE;
+        Logger.log("Setting shooter power to " + scaledPower + " (scaled)");
+        shooterMotorLeft.set(scaledPower);
+        shooterMotorRight.set(scaledPower);
         towerMotor.set(TOWER_POWER);
         conveyorMotor.set(CONVEYOR_POWER);
     }
@@ -387,10 +392,11 @@ public class ShooterSubsystem extends SubsystemBase {
      * @param velocityRPM Target velocity in RPM
      */
     public void setShooterVelocity(double velocityRPM) {
-        targetVelocity = velocityRPM;
-        Logger.log("Setting shooter velocity to " + velocityRPM + " RPM");
-        leftClosedLoop.setReference(velocityRPM, ControlType.kVelocity);
-        rightClosedLoop.setReference(velocityRPM, ControlType.kVelocity);
+        double scaledVelocityRPM = velocityRPM * SHOOTER_OUTPUT_SCALE;
+        targetVelocity = scaledVelocityRPM;
+        Logger.log("Setting shooter velocity to " + scaledVelocityRPM + " RPM (scaled)");
+        leftClosedLoop.setReference(scaledVelocityRPM, ControlType.kVelocity);
+        rightClosedLoop.setReference(scaledVelocityRPM, ControlType.kVelocity);
         towerMotor.set(TOWER_POWER);
         conveyorMotor.set(CONVEYOR_POWER);
     }
@@ -436,6 +442,7 @@ public class ShooterSubsystem extends SubsystemBase {
     public void setShooterVelocityFF(double velocityRPM) {
         // Apply soft limits
         velocityRPM = Math.max(-MAX_VELOCITY_RPM, Math.min(MAX_VELOCITY_RPM, velocityRPM));
+        velocityRPM = velocityRPM * SHOOTER_OUTPUT_SCALE;
         targetVelocity = velocityRPM;
 
         // Convert RPM to rotations per second for SimpleMotorFeedforward

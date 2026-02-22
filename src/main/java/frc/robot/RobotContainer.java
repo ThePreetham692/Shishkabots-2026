@@ -4,23 +4,12 @@
 
 package frc.robot;
 
-import frc.robot.Constants.OperatorConstants;
-import frc.robot.commands.Autos;
-import frc.robot.commands.ExampleCommand;
-import frc.robot.subsystems.ExampleSubsystem;
 import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
-import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
-import frc.robot.commands.AutoAllign;
 import frc.robot.commands.DefaultDriveCommand;
-import frc.robot.commands.EmergencyStopCommand;
 import frc.robot.subsystems.DriveSubsystem;
 import frc.robot.subsystems.LimelightSubsystem;
 import frc.robot.subsystems.ShooterSubsystem;
-import edu.wpi.first.wpilibj2.command.button.JoystickButton;
-import edu.wpi.first.wpilibj2.command.RunCommand;
-import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.XboxController;
 
 /**
@@ -44,8 +33,12 @@ public class RobotContainer {
   private final XboxController mechanismController = new XboxController(1); // Secondary controller on port 1
 
   private static final double DEADBAND = 0.1;
-  private static final double SHOOTER_DEADBAND = 0.06;
   private static final double ROTATION_MULTIPLIER = 0.7; // Rotation is 70% of translation speed
+  private static final double NORMAL_TRANSLATION_SCALE = 0.70;
+  private static final double NORMAL_ROTATION_SCALE = 0.65;
+  private static final double SPRINT_TRANSLATION_SCALE = 1.00;
+  private static final double SPRINT_ROTATION_SCALE = 0.90;
+  private static final boolean TELEOP_FIELD_RELATIVE = false;
 
   // setup the AutoBuilder with all pathplanner paths in place
   private SendableChooser<Command> autoChooser = new SendableChooser<>();
@@ -55,37 +48,52 @@ public class RobotContainer {
   }
 
   /**
-   * Apply deadband and square the input for smoother control
-   * Squaring preserves the sign but gives more precision at low speeds
+   * Apply deadband and a blended cubic response for smoother, less twitchy driving.
    */
   private double applyDeadbandAndCurve(double value) {
     if (Math.abs(value) < DEADBAND) {
       return 0.0;
     }
-    // Remove deadband from the range, then square for smoother curve
+
     double sign = Math.signum(value);
     double adjusted = (Math.abs(value) - DEADBAND) / (1.0 - DEADBAND);
-    return sign * adjusted * adjusted; // Squared input for fine control
+    // Blend linear and cubic to keep fine control near center without feeling sluggish at mid-stick.
+    double curved = 0.5 * adjusted + 0.5 * adjusted * adjusted * adjusted;
+    return sign * curved;
   }
 
   /**
-   * Apply deadband without curve (linear response)
+   * Radial deadband for the translation stick so tiny stick noise does not cause sideways drift.
+   * Returns [forward, strafe] in robot-centric axes.
    */
-  private double applyDeadband(double value) {
-    if (Math.abs(value) < DEADBAND) {
-      return 0.0;
+  private double[] getTranslationInputs() {
+    double rawForward = -driveController.getLeftY();
+    double rawStrafe = -driveController.getLeftX();
+
+    double magnitude = Math.hypot(rawForward, rawStrafe);
+    if (magnitude < DEADBAND) {
+      return new double[] {0.0, 0.0};
     }
-    return value;
+
+    double adjustedMagnitude = (magnitude - DEADBAND) / (1.0 - DEADBAND);
+    double curvedMagnitude = 0.5 * adjustedMagnitude + 0.5 * adjustedMagnitude * adjustedMagnitude * adjustedMagnitude;
+
+    double unitForward = rawForward / magnitude;
+    double unitStrafe = rawStrafe / magnitude;
+
+    return new double[] {unitForward * curvedMagnitude, unitStrafe * curvedMagnitude};
+  }
+
+  private double getTranslationScale() {
+    return driveController.getRightBumperButton() ? SPRINT_TRANSLATION_SCALE : NORMAL_TRANSLATION_SCALE;
+  }
+
+  private double getRotationScale() {
+    return driveController.getRightBumperButton() ? SPRINT_ROTATION_SCALE : NORMAL_ROTATION_SCALE;
   }
 
   private double getForwardInput() {
-    double primaryInput = -driveController.getLeftY();
-    return applyDeadbandAndCurve(primaryInput);
-  }
-
-  private double getStrafeInput() {
-    double primaryInput = -driveController.getLeftX();
-    return applyDeadbandAndCurve(primaryInput);
+    return getTranslationInputs()[0];
   }
 
   private double getRotationInput() {
@@ -94,11 +102,9 @@ public class RobotContainer {
     return applyDeadbandAndCurve(primaryInput) * ROTATION_MULTIPLIER;
   }
 
-  
-
-  // Replace with CommandPS4Controller or CommandJoystick if needed
-  private final CommandXboxController m_driverController =
-      new CommandXboxController(OperatorConstants.kDriverControllerPort);
+  private double getStrafeInput() {
+    return getTranslationInputs()[1];
+  }
 
   /** The container for the robot. Contains subsystems, OI devices, and commands. */
   public RobotContainer() {
@@ -108,9 +114,10 @@ public class RobotContainer {
     driveSubsystem.setDefaultCommand(
         new DefaultDriveCommand(
             driveSubsystem,
-            () -> getForwardInput() * 0.6,  // Forward/backward
-            () -> getStrafeInput() * 0.6,   // Left/right
-            () -> getRotationInput() * 0.6  // Rotation
+            () -> getForwardInput() * getTranslationScale(),
+            () -> getStrafeInput() * getTranslationScale(),
+            () -> getRotationInput() * getRotationScale(),
+            TELEOP_FIELD_RELATIVE
         )
     );
 
@@ -128,69 +135,7 @@ public class RobotContainer {
    * joysticks}.
    */
   private void configureBindings() {
-    // Configure button bindings for both controllers
-    // Both controllers have identical bindings for redundancy and flexibility
-    // This allows either the driver or operator to control any function if needed
-    
-    // Primary Xbox Controller Bindings (port 0)
-
-    // Emergency stop for all subsystems (Back + Start buttons together)
-    new JoystickButton(driveController, XboxController.Button.kBack.value)
-        .and(new JoystickButton(driveController, XboxController.Button.kStart.value))
-        .onTrue(new EmergencyStopCommand(driveSubsystem));
-
-      // Slow driving mode for primary controller
-    new JoystickButton(driveController, XboxController.Button.kRightBumper.value)
-    .whileTrue(
-        new DefaultDriveCommand(
-            driveSubsystem,
-            () -> getForwardInput() * 0.45,
-            () -> getStrafeInput() * 0.45,
-            () -> getRotationInput() * 0.45
-        )
-    );
-
-    // Auto-align to AprilTag using Limelight (A button)
-    new JoystickButton(driveController, XboxController.Button.kA.value)
-        .whileTrue(new AutoAllign(limelightSubsystem, driveSubsystem));
-
-    // Shooter - toggle on/off with B button (feedforward control at 5000 RPM)
-    new JoystickButton(driveController, XboxController.Button.kB.value)
-        .toggleOnTrue(new RunCommand(() -> shooterSubsystem.setShooterVelocityFF(5000), shooterSubsystem)
-            .finallyDo(() -> shooterSubsystem.stop()));
-
-    // ==================== WHEEL TEST BUTTONS ====================
-    // X button: Test drive motors (hold to spin wheels at 20% power)
-    new JoystickButton(driveController, XboxController.Button.kX.value)
-        .whileTrue(new RunCommand(() -> driveSubsystem.testDriveMotors(0.2), driveSubsystem)
-            .finallyDo(() -> driveSubsystem.stop()));
-
-    // Y button: Test turning motors (hold to rotate wheels at 20% power)
-    new JoystickButton(driveController, XboxController.Button.kY.value)
-        .whileTrue(new RunCommand(() -> driveSubsystem.testTurningMotors(0.2), driveSubsystem)
-            .finallyDo(() -> driveSubsystem.stop()));
-
-    // Left bumper: Point all wheels forward (0 degrees)
-    new JoystickButton(driveController, XboxController.Button.kLeftBumper.value)
-        .whileTrue(new RunCommand(() -> driveSubsystem.setAllWheelAngles(0), driveSubsystem)
-            .finallyDo(() -> driveSubsystem.stop()));
-
-    // RT (Right Trigger): Sprint mode - full speed (4.5 m/s)
-    new Trigger(() -> driveController.getRightTriggerAxis() > 0.5)
-        .whileTrue(new DefaultDriveCommand(
-            driveSubsystem,
-            () -> getForwardInput() * 1.67,  // 1.67 * 0.6 = 1.0 (full speed)
-            () -> getStrafeInput() * 1.67,
-            () -> getRotationInput() * 1.43   // Slightly faster rotation in sprint
-        ));
-
-    // Start button: Reset gyro (resets field-relative forward direction)
-    new JoystickButton(driveController, XboxController.Button.kStart.value)
-        .onTrue(new RunCommand(() -> {
-            driveSubsystem.zeroHeading();
-            System.out.println("Gyro reset - current heading is now forward");
-        }, driveSubsystem).withTimeout(0.1));
-
+    // No command bindings needed for drive. Sprint is handled directly from Right Bumper in suppliers.
   }
 
   /**

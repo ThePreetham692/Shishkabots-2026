@@ -70,10 +70,12 @@ public final class Constants {
         // 4. Copy those values here as the angular offsets
         // 5. Re-deploy and test - all wheels should now point forward when driving forward
         // ======================================================================
-        public static final double FRONT_LEFT_CHASIS_ANGULAR_OFFSET = 0;  // TODO: Calibrate
-        public static final double FRONT_RIGHT_CHASIS_ANGULAR_OFFSET = 0; // TODO: Calibrate
-        public static final double BACK_LEFT_CHASIS_ANGULAR_OFFSET = 0;   // TODO: Calibrate
-        public static final double BACK_RIGHT_CHASIS_ANGULAR_OFFSET = 0;  // TODO: Calibrate
+        // Replace 0.0 values below with radians from Shuffleboard:
+        // Calibration/FrontLeft, Calibration/FrontRight, Calibration/BackLeft, Calibration/BackRight
+        public static final double FRONT_LEFT_CHASIS_ANGULAR_OFFSET = 2.37273287773;
+        public static final double FRONT_RIGHT_CHASIS_ANGULAR_OFFSET = 1.99804341793;
+        public static final double BACK_LEFT_CHASIS_ANGULAR_OFFSET = 5.40703582763;
+        public static final double BACK_RIGHT_CHASIS_ANGULAR_OFFSET = 0.68019169569;
 
         // Spark Max CAN IDs
         public static final int DRIVE_FRONT_LEFT_CAN_ID = 3;

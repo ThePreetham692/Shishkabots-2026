@@ -29,7 +29,6 @@ import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.Constants.DriveConstants;
-import util.Logger;
 
 public class DriveSubsystem extends SubsystemBase {
   /** Creates a new DriveSubsystem. */
@@ -182,6 +181,11 @@ public class DriveSubsystem extends SubsystemBase {
             return;
         }
 
+        // Smooth command changes so driving feels controlled.
+        xSpeed = m_xSpeedLimiter.calculate(xSpeed);
+        ySpeed = m_ySpeedLimiter.calculate(ySpeed);
+        rot = m_rotLimiter.calculate(rot);
+
         // Convert the commanded speeds from [-1, 1] to real speeds
         xSpeed = xSpeed * DriveConstants.MAX_SPEED_IN_MPS;
         ySpeed = ySpeed * DriveConstants.MAX_SPEED_IN_MPS;
@@ -225,6 +229,9 @@ public class DriveSubsystem extends SubsystemBase {
         m_frontRight.stop();
         m_backLeft.stop();
         m_backRight.stop();
+        m_xSpeedLimiter.reset(0.0);
+        m_ySpeedLimiter.reset(0.0);
+        m_rotLimiter.reset(0.0);
     }
 
     /**
@@ -262,7 +269,7 @@ public class DriveSubsystem extends SubsystemBase {
     // This method will be called once per scheduler run
      // Only update logging every 50 cycles to reduce processing load and network traffic
         updateCounter++;
-        if (updateCounter >= 50) {
+        if (updateCounter >= 10) {
             try {
                 // set robot position in the field (keep this for field visualization)
                 m_field.setRobotPose(m_PoseEstimator.getPose2d());
@@ -298,6 +305,43 @@ public class DriveSubsystem extends SubsystemBase {
 
                 // Show gyro heading
                 SmartDashboard.putNumber("Drive/Gyro_Degrees", getGyroRotation().getDegrees());
+                SmartDashboard.putNumber("Drive/Gyro_Radians", getGyroRotation().getRadians());
+
+                // --- Per-module debug values for Shuffleboard ---
+                SmartDashboard.putNumber("Drive/FrontLeft/MeasuredAngleRad", m_frontLeft.getSteerAngle());
+                SmartDashboard.putNumber("Drive/FrontRight/MeasuredAngleRad", m_frontRight.getSteerAngle());
+                SmartDashboard.putNumber("Drive/BackLeft/MeasuredAngleRad", m_backLeft.getSteerAngle());
+                SmartDashboard.putNumber("Drive/BackRight/MeasuredAngleRad", m_backRight.getSteerAngle());
+
+                SmartDashboard.putNumber("Drive/FrontLeft/MeasuredAngleDeg", Math.toDegrees(m_frontLeft.getSteerAngle()));
+                SmartDashboard.putNumber("Drive/FrontRight/MeasuredAngleDeg", Math.toDegrees(m_frontRight.getSteerAngle()));
+                SmartDashboard.putNumber("Drive/BackLeft/MeasuredAngleDeg", Math.toDegrees(m_backLeft.getSteerAngle()));
+                SmartDashboard.putNumber("Drive/BackRight/MeasuredAngleDeg", Math.toDegrees(m_backRight.getSteerAngle()));
+
+                SmartDashboard.putNumber("Drive/FrontLeft/DesiredAngleRad", m_frontLeft.getDesiredAngle());
+                SmartDashboard.putNumber("Drive/FrontRight/DesiredAngleRad", m_frontRight.getDesiredAngle());
+                SmartDashboard.putNumber("Drive/BackLeft/DesiredAngleRad", m_backLeft.getDesiredAngle());
+                SmartDashboard.putNumber("Drive/BackRight/DesiredAngleRad", m_backRight.getDesiredAngle());
+
+                SmartDashboard.putNumber("Drive/FrontLeft/DriveSpeedMps", m_frontLeft.getDriveSpeed());
+                SmartDashboard.putNumber("Drive/FrontRight/DriveSpeedMps", m_frontRight.getDriveSpeed());
+                SmartDashboard.putNumber("Drive/BackLeft/DriveSpeedMps", m_backLeft.getDriveSpeed());
+                SmartDashboard.putNumber("Drive/BackRight/DriveSpeedMps", m_backRight.getDriveSpeed());
+
+                SmartDashboard.putNumber("Drive/FrontLeft/DesiredSpeedMps", m_frontLeft.getDesiredSpeed());
+                SmartDashboard.putNumber("Drive/FrontRight/DesiredSpeedMps", m_frontRight.getDesiredSpeed());
+                SmartDashboard.putNumber("Drive/BackLeft/DesiredSpeedMps", m_backLeft.getDesiredSpeed());
+                SmartDashboard.putNumber("Drive/BackRight/DesiredSpeedMps", m_backRight.getDesiredSpeed());
+
+                SmartDashboard.putNumber("Drive/FrontLeft/DriveVoltage", m_frontLeft.getDriveVoltage());
+                SmartDashboard.putNumber("Drive/FrontRight/DriveVoltage", m_frontRight.getDriveVoltage());
+                SmartDashboard.putNumber("Drive/BackLeft/DriveVoltage", m_backLeft.getDriveVoltage());
+                SmartDashboard.putNumber("Drive/BackRight/DriveVoltage", m_backRight.getDriveVoltage());
+
+                SmartDashboard.putNumber("Drive/FrontLeft/TurnVoltage", m_frontLeft.getTurningVoltage());
+                SmartDashboard.putNumber("Drive/FrontRight/TurnVoltage", m_frontRight.getTurningVoltage());
+                SmartDashboard.putNumber("Drive/BackLeft/TurnVoltage", m_backLeft.getTurningVoltage());
+                SmartDashboard.putNumber("Drive/BackRight/TurnVoltage", m_backRight.getTurningVoltage());
             } catch (Exception e) {
                 System.err.println("Error updating dashboard: " + e.getMessage());
             }
