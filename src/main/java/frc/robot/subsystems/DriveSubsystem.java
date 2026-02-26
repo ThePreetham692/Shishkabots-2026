@@ -177,7 +177,7 @@ public class DriveSubsystem extends SubsystemBase {
     public void drive(double xSpeed, double ySpeed, double rot, boolean fieldRelative) {
         // If all inputs are zero, stop the motors
         if (Math.abs(xSpeed) < 1E-6 && Math.abs(ySpeed) < 1E-6 && Math.abs(rot) < 1E-6) {
-            stop();
+            holdModules();
             return;
         }
 
@@ -229,6 +229,19 @@ public class DriveSubsystem extends SubsystemBase {
         m_frontRight.stop();
         m_backLeft.stop();
         m_backRight.stop();
+        m_xSpeedLimiter.reset(0.0);
+        m_ySpeedLimiter.reset(0.0);
+        m_rotLimiter.reset(0.0);
+    }
+
+    /**
+     * Hold module steering angles and zero drive speed to resist passive wheel rotation.
+     */
+    public void holdModules() {
+        m_frontLeft.holdPosition();
+        m_frontRight.holdPosition();
+        m_backLeft.holdPosition();
+        m_backRight.holdPosition();
         m_xSpeedLimiter.reset(0.0);
         m_ySpeedLimiter.reset(0.0);
         m_rotLimiter.reset(0.0);

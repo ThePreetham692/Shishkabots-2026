@@ -139,6 +139,17 @@ public SwerveModuleState getState() {
     }
 
     /**
+     * Actively hold the current steering angle while commanding zero drive velocity.
+     * This resists carpet-induced module rotation better than stopping both motors.
+     */
+    public void holdPosition() {
+        desiredSpeed = 0.0;
+        desiredAngle = turningEncoder.getPosition();
+        driveClosedLoopController.setReference(0.0, ControlType.kVelocity);
+        turningClosedLoopController.setReference(desiredAngle, ControlType.kPosition);
+    }
+
+    /**
      * Returns the current position of the drive encoder in meters
      */
     public double getDrivePosition() {

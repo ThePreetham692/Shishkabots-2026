@@ -32,6 +32,16 @@ public class Robot extends TimedRobot {
     m_robotContainer = new RobotContainer();
   }
 
+  @Override
+  public void robotInit() {
+    boolean driverConnected = DriverStation.isJoystickConnected(Constants.OperatorConstants.DRIVER_CONTROLLER_PORT);
+    String driverName = DriverStation.getJoystickName(Constants.OperatorConstants.DRIVER_CONTROLLER_PORT);
+    Logger.log("Driver controller port " + Constants.OperatorConstants.DRIVER_CONTROLLER_PORT
+        + " connected=" + driverConnected + " name=\"" + driverName + "\"");
+    SmartDashboard.putBoolean("DriverController/Connected", driverConnected);
+    SmartDashboard.putString("DriverController/Name", driverName);
+  }
+
   /**
    * This function is called every 20 ms, no matter the mode. Use this for items like diagnostics
    * that you want ran during disabled, autonomous, teleoperated and test.

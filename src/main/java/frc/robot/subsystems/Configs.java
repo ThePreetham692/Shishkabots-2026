@@ -41,7 +41,7 @@ public class Configs extends SubsystemBase {
         public static void setTurningMotorSettings(SparkMaxConfig turnConfig) {
             turnConfig
                 .idleMode(IdleMode.kBrake)
-                .smartCurrentLimit(30)  // Increased from 20A to 30A for stronger steering
+                .smartCurrentLimit(20)
                 .voltageCompensation(12.0);
             turnConfig.absoluteEncoder
                 .inverted(true)

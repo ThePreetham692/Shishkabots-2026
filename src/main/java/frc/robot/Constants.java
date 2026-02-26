@@ -72,10 +72,10 @@ public final class Constants {
         // ======================================================================
         // Replace 0.0 values below with radians from Shuffleboard:
         // Calibration/FrontLeft, Calibration/FrontRight, Calibration/BackLeft, Calibration/BackRight
-        public static final double FRONT_LEFT_CHASIS_ANGULAR_OFFSET = 2.37273287773;
-        public static final double FRONT_RIGHT_CHASIS_ANGULAR_OFFSET = 1.99804341793;
-        public static final double BACK_LEFT_CHASIS_ANGULAR_OFFSET = 5.40703582763;
-        public static final double BACK_RIGHT_CHASIS_ANGULAR_OFFSET = 0.68019169569;
+        public static final double FRONT_LEFT_CHASIS_ANGULAR_OFFSET = 5.55986356735;
+        public static final double FRONT_RIGHT_CHASIS_ANGULAR_OFFSET = 5.06326246261;
+        public static final double BACK_LEFT_CHASIS_ANGULAR_OFFSET = 2.17004394531;
+        public static final double BACK_RIGHT_CHASIS_ANGULAR_OFFSET = 3.73321795463;
 
         // Spark Max CAN IDs
         public static final int DRIVE_FRONT_LEFT_CAN_ID = 3;
@@ -91,8 +91,8 @@ public final class Constants {
         public static final int PIGEON_CAN_ID = 9;
 
         // Full speed settings (CA26 uses 14.5 ft/s = 4.42 m/s)
-        public static final double MAX_SPEED_IN_MPS = 4.5; // meters per second
-        public static final double MAX_ANGULAR_SPEED_IN_RPS = 1.5 * Math.PI; // radians per second
+        public static final double MAX_SPEED_IN_MPS = 5.8; // meters per second
+        public static final double MAX_ANGULAR_SPEED_IN_RPS = 2.2 * Math.PI; // radians per second
 
         public static final double MAX_DIRECTION_SLEW_RATE_RPS = 1.3; // radians per second
         public static final double MAX_MAGNITUDE_SLEW_RATE = 1.8; // percent per second (1 = 100%)
@@ -134,7 +134,7 @@ public static final class ModuleConstants {
         public static final double FREE_SPEED_RPM = 5676;
     }
   public static class OperatorConstants {
-    public static final int kDriverControllerPort = 0;
-    // test commit
+    public static final int DRIVER_CONTROLLER_PORT = 0;
+    public static final int OPERATOR_CONTROLLER_PORT = 1;
   }
 }

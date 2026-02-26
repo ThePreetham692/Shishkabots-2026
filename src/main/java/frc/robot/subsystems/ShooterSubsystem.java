@@ -34,21 +34,34 @@ public class ShooterSubsystem extends SubsystemBase {
     private final SparkMax shooterMotorRight;
     private final SparkMax towerMotor;
     private final SparkMax conveyorMotor;
+    private final SparkMax intakeMotor;
 
     // Closed loop controllers for PID velocity control
     private final SparkClosedLoopController leftClosedLoop;
     private final SparkClosedLoopController rightClosedLoop;
 
+
+
+
+
+
+
+
+
+
+
+
+    
     // Feed power into shooter wheels. Lower values reduce "pop-up" at entry and flatten flight path.
     private static final double TOWER_POWER = 0.65;
-    private static final double CONVEYOR_POWER = 0.08;
+    private static final double CONVEYOR_POWER = 0.45;
 
     // PID constants for shooter velocity control - aggressive tuning for faster response
     private static final double SHOOTER_P = 0.02;
     private static final double SHOOTER_I = 0.0;
     private static final double SHOOTER_D = 0.001;
     private static final double SHOOTER_FF = 0.00019; // Feedforward for SparkMax built-in
-    private static final double SHOOTER_OUTPUT_SCALE = 0.60; // 40% reduction from previous output
+    private static final double SHOOTER_OUTPUT_SCALE = 1.00; // Full output scaling for max speed
 
     // WPILib SimpleMotorFeedforward for proper feedforward control
     // Aggressive tuning for faster spin-up and higher velocity
@@ -62,13 +75,13 @@ public class ShooterSubsystem extends SubsystemBase {
     private static final double WHEEL_RADIUS_METERS = Units.inchesToMeters(WHEEL_DIAMETER_INCHES / 2.0);
 
     // Soft limits for safety (RPM)
-    private static final double MAX_VELOCITY_RPM = 6000;
+    private static final double MAX_VELOCITY_RPM = 6500;
     private static final double MIN_VELOCITY_RPM = 0;
 
 
     // Target velocity for shooter (RPM)
     // Slightly faster wheel speed while keeping feed gentler for a flatter shot.
-    private static final double SHOOTING_VELOCITY_RPM = 5650;
+    private static final double SHOOTING_VELOCITY_RPM = 6200;
     private static final double INTAKE_VELOCITY_RPM = 2000;
     private double targetVelocity = 0;
 
@@ -84,20 +97,25 @@ public class ShooterSubsystem extends SubsystemBase {
     // private static final double INTAKE_TIMEOUT = 10; // seconds to wait for coral to be fully inside
 
     // Motor configuration constants
-    private static final double L4_SHOOTING_POWER = 0.85;
-    private static final double SHOOTING_POWER = 0.85;
-    private static final double INTAKE_POWER = 0.7;
-    private static final int MAX_CURRENT = 40; // Amps
+    private static final double L4_SHOOTING_POWER = 0.90;
+    private static final double SHOOTING_POWER = 0.90;
+    private static final double INTAKE_POWER = 0.6;
+    private static final int TOWER_CURRENT_LIMIT = 40; // Amps
+    private static final int CONVEYOR_CURRENT_LIMIT = 15; // Amps
+    private static final int SHOOTER_CURRENT_LIMIT = 35; // Amps
+    private static final int INTAKE_CURRENT_LIMIT = 30; // Amps
     private static final double SHOOT_DURATION = 2.0; // seconds
 
     // telemetry timer
     private int periodicCounter = 0;
+    private boolean intakeOnlyEnabled = false;
 
-    public ShooterSubsystem(int shooterLeftCanId, int shooterRightCanId, int towerCanId, int conveyorCanId) {
+    public ShooterSubsystem(int shooterLeftCanId, int shooterRightCanId, int towerCanId, int conveyorCanId, int intakeCanId) {
         shooterMotorLeft = new SparkMax(shooterLeftCanId, MotorType.kBrushless);
         shooterMotorRight = new SparkMax(shooterRightCanId, MotorType.kBrushless);
         towerMotor = new SparkMax(towerCanId, MotorType.kBrushless);
         conveyorMotor = new SparkMax(conveyorCanId, MotorType.kBrushless);
+        intakeMotor = new SparkMax(intakeCanId, MotorType.kBrushless);
 
         // Get closed loop controllers for PID control
         leftClosedLoop = shooterMotorLeft.getClosedLoopController();
@@ -108,7 +126,7 @@ public class ShooterSubsystem extends SubsystemBase {
         shooterLeftConfig
             .idleMode(IdleMode.kCoast)
             .inverted(false)
-            .smartCurrentLimit(50)  // Higher current for more power
+            .smartCurrentLimit(SHOOTER_CURRENT_LIMIT)
             .voltageCompensation(12.0);
         shooterLeftConfig.closedLoop
             .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
@@ -127,7 +145,7 @@ public class ShooterSubsystem extends SubsystemBase {
         shooterRightConfig
             .idleMode(IdleMode.kCoast)
             .inverted(true)
-            .smartCurrentLimit(50)  // Higher current for more power
+            .smartCurrentLimit(SHOOTER_CURRENT_LIMIT)
             .voltageCompensation(12.0);
         shooterRightConfig.closedLoop
             .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
@@ -146,7 +164,7 @@ public class ShooterSubsystem extends SubsystemBase {
         towerConfig
             .idleMode(IdleMode.kCoast)
             .inverted(false)
-            .smartCurrentLimit(MAX_CURRENT)
+            .smartCurrentLimit(TOWER_CURRENT_LIMIT)
             .openLoopRampRate(0.05);
 
         towerMotor.configure(
@@ -160,11 +178,25 @@ public class ShooterSubsystem extends SubsystemBase {
         conveyorConfig
             .idleMode(IdleMode.kCoast)
             .inverted(false)
-            .smartCurrentLimit(MAX_CURRENT)
+            .smartCurrentLimit(CONVEYOR_CURRENT_LIMIT)
             .openLoopRampRate(0.05);
 
         conveyorMotor.configure(
             conveyorConfig,
+            ResetMode.kResetSafeParameters,
+            PersistMode.kPersistParameters
+        );
+
+        // Configure intake motor
+        SparkMaxConfig intakeConfig = new SparkMaxConfig();
+        intakeConfig
+            .idleMode(IdleMode.kCoast)
+            .inverted(true)
+            .smartCurrentLimit(INTAKE_CURRENT_LIMIT)
+            .openLoopRampRate(0.05);
+
+        intakeMotor.configure(
+            intakeConfig,
             ResetMode.kResetSafeParameters,
             PersistMode.kPersistParameters
         );
@@ -271,6 +303,7 @@ public class ShooterSubsystem extends SubsystemBase {
         shooterMotorRight.stopMotor();
         towerMotor.stopMotor();
         conveyorMotor.stopMotor();
+        intakeMotor.stopMotor();
     }
 
     /**
@@ -279,6 +312,7 @@ public class ShooterSubsystem extends SubsystemBase {
      */
     public void stop() {
         stopMotor();
+        intakeOnlyEnabled = false;
     }
 
     /**
@@ -360,6 +394,7 @@ public class ShooterSubsystem extends SubsystemBase {
         SmartDashboard.putNumber("Shooter/RightVoltage", shooterRightVoltage);
         SmartDashboard.putNumber("Shooter/TowerVoltage", towerVoltage);
         SmartDashboard.putNumber("Shooter/ConveyorVoltage", conveyorVoltage);
+        SmartDashboard.putNumber("Shooter/IntakeVoltage", intakeMotor.getBusVoltage() * intakeMotor.getAppliedOutput());
         SmartDashboard.putNumber("Shooter/LeftCurrent", shooterMotorLeft.getOutputCurrent());
         SmartDashboard.putNumber("Shooter/RightCurrent", shooterMotorRight.getOutputCurrent());
 
@@ -385,6 +420,66 @@ public class ShooterSubsystem extends SubsystemBase {
         shooterMotorRight.set(scaledPower);
         towerMotor.set(TOWER_POWER);
         conveyorMotor.set(CONVEYOR_POWER);
+    }
+
+    /**
+     * Run intake motor + conveyor together (used for loading game pieces).
+     * @param power Open loop power [-1, 1]
+     */
+    public void runIntakeAndConveyor(double power) {
+        intakeMotor.set(power);
+        conveyorMotor.set(power);
+    }
+
+    /**
+     * Run intake + conveyor at default intake power.
+     */
+    public void runIntakeAndConveyor() {
+        runIntakeAndConveyor(INTAKE_POWER);
+    }
+
+    /**
+     * Run only the intake motor.
+     * @param power Open loop power [-1, 1]
+     */
+    public void runIntakeOnly(double power) {
+        intakeMotor.set(power);
+        intakeOnlyEnabled = true;
+    }
+
+    /**
+     * Run intake motor at default intake power.
+     */
+    public void runIntakeOnly() {
+        runIntakeOnly(INTAKE_POWER);
+    }
+
+    /**
+     * Stop only intake and conveyor motors.
+     */
+    public void stopIntakeAndConveyor() {
+        intakeMotor.stopMotor();
+        conveyorMotor.stopMotor();
+    }
+
+    /**
+     * Stop only the intake motor.
+     */
+    public void stopIntakeOnly() {
+        intakeMotor.stopMotor();
+        intakeOnlyEnabled = false;
+    }
+
+    /**
+     * Toggle intake-only mode on the intake motor.
+     * @param power Intake motor power when enabling.
+     */
+    public void toggleIntakeOnly(double power) {
+        if (intakeOnlyEnabled) {
+            stopIntakeOnly();
+        } else {
+            runIntakeOnly(power);
+        }
     }
 
     /**
