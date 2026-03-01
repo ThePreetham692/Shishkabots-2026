@@ -53,21 +53,24 @@ public class ShooterSubsystem extends SubsystemBase {
 
     
     // Feed power into shooter wheels. Lower values reduce "pop-up" at entry and flatten flight path.
-    private static final double TOWER_POWER = 0.65;
-    private static final double CONVEYOR_POWER = 0.45;
+    private static final double TOWER_POWER = 0.70;
+    private static final double CONVEYOR_POWER = 0.70;
 
-    // PID constants for shooter velocity control - aggressive tuning for faster response
-    private static final double SHOOTER_P = 0.02;
+    // Velocity loop tuned for stable speed hold under load, not aggressive step response.
+    private static final double SHOOTER_P = 0.00028;
     private static final double SHOOTER_I = 0.0;
-    private static final double SHOOTER_D = 0.001;
-    private static final double SHOOTER_FF = 0.00019; // Feedforward for SparkMax built-in
+    private static final double SHOOTER_D = 0.0;
+    private static final double SHOOTER_FF = 0.000175;
     private static final double SHOOTER_OUTPUT_SCALE = 1.00; // Full output scaling for max speed
+    private static final double SHOOTER_READY_TOLERANCE_RPM = 250.0;
+    private static final double FEEDER_SPINUP_SCALE = 0.35;
+    private static final double SHOOTER_MAX_OUTPUT = 0.92;
 
     // WPILib SimpleMotorFeedforward for proper feedforward control
-    // Aggressive tuning for faster spin-up and higher velocity
-    private static final double FF_kS = 0.2;     // Static friction (volts) - higher for faster startup
-    private static final double FF_kV = 0.118;   // Velocity gain - slightly lower to allow higher speeds
-    private static final double FF_kA = 0.01;    // Acceleration gain for faster spin-up
+    // Feedforward estimate for smoother closed-loop hold.
+    private static final double FF_kS = 0.15;
+    private static final double FF_kV = 0.175;
+    private static final double FF_kA = 0.0;
     private final SimpleMotorFeedforward feedforward = new SimpleMotorFeedforward(FF_kS, FF_kV, FF_kA);
 
     // Shooter wheel configuration
@@ -75,13 +78,13 @@ public class ShooterSubsystem extends SubsystemBase {
     private static final double WHEEL_RADIUS_METERS = Units.inchesToMeters(WHEEL_DIAMETER_INCHES / 2.0);
 
     // Soft limits for safety (RPM)
-    private static final double MAX_VELOCITY_RPM = 6500;
+    private static final double MAX_VELOCITY_RPM = 5600;
     private static final double MIN_VELOCITY_RPM = 0;
 
 
     // Target velocity for shooter (RPM)
     // Slightly faster wheel speed while keeping feed gentler for a flatter shot.
-    private static final double SHOOTING_VELOCITY_RPM = 6200;
+    private static final double SHOOTING_VELOCITY_RPM = 5400;
     private static final double INTAKE_VELOCITY_RPM = 2000;
     private double targetVelocity = 0;
 
@@ -99,7 +102,7 @@ public class ShooterSubsystem extends SubsystemBase {
     // Motor configuration constants
     private static final double L4_SHOOTING_POWER = 0.90;
     private static final double SHOOTING_POWER = 0.90;
-    private static final double INTAKE_POWER = 0.6;
+    private static final double INTAKE_POWER = 0.75;
     private static final int TOWER_CURRENT_LIMIT = 40; // Amps
     private static final int CONVEYOR_CURRENT_LIMIT = 15; // Amps
     private static final int SHOOTER_CURRENT_LIMIT = 35; // Amps
@@ -132,7 +135,7 @@ public class ShooterSubsystem extends SubsystemBase {
             .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
             .pid(SHOOTER_P, SHOOTER_I, SHOOTER_D)
             .velocityFF(SHOOTER_FF)
-            .outputRange(-1, 1);
+            .outputRange(-SHOOTER_MAX_OUTPUT, SHOOTER_MAX_OUTPUT);
 
         shooterMotorLeft.configure(
             shooterLeftConfig,
@@ -151,7 +154,7 @@ public class ShooterSubsystem extends SubsystemBase {
             .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
             .pid(SHOOTER_P, SHOOTER_I, SHOOTER_D)
             .velocityFF(SHOOTER_FF)
-            .outputRange(-1, 1);
+            .outputRange(-SHOOTER_MAX_OUTPUT, SHOOTER_MAX_OUTPUT);
 
         shooterMotorRight.configure(
             shooterRightConfig,
@@ -304,6 +307,11 @@ public class ShooterSubsystem extends SubsystemBase {
         towerMotor.stopMotor();
         conveyorMotor.stopMotor();
         intakeMotor.stopMotor();
+    }
+
+    private void setFeeders(double towerPower, double conveyorPower) {
+        towerMotor.set(towerPower);
+        conveyorMotor.set(conveyorPower);
     }
 
     /**
@@ -487,13 +495,12 @@ public class ShooterSubsystem extends SubsystemBase {
      * @param velocityRPM Target velocity in RPM
      */
     public void setShooterVelocity(double velocityRPM) {
-        double scaledVelocityRPM = velocityRPM * SHOOTER_OUTPUT_SCALE;
+        double clampedVelocityRPM = Math.max(-MAX_VELOCITY_RPM, Math.min(MAX_VELOCITY_RPM, velocityRPM));
+        double scaledVelocityRPM = clampedVelocityRPM * SHOOTER_OUTPUT_SCALE;
         targetVelocity = scaledVelocityRPM;
         Logger.log("Setting shooter velocity to " + scaledVelocityRPM + " RPM (scaled)");
         leftClosedLoop.setReference(scaledVelocityRPM, ControlType.kVelocity);
         rightClosedLoop.setReference(scaledVelocityRPM, ControlType.kVelocity);
-        towerMotor.set(TOWER_POWER);
-        conveyorMotor.set(CONVEYOR_POWER);
     }
 
     /**
@@ -501,6 +508,11 @@ public class ShooterSubsystem extends SubsystemBase {
      */
     public void shootWithPID() {
         setShooterVelocity(SHOOTING_VELOCITY_RPM);
+        if (isAtTargetVelocity(SHOOTER_READY_TOLERANCE_RPM)) {
+            setFeeders(TOWER_POWER, CONVEYOR_POWER);
+        } else {
+            setFeeders(TOWER_POWER * FEEDER_SPINUP_SCALE, CONVEYOR_POWER * FEEDER_SPINUP_SCALE);
+        }
     }
 
     /**
@@ -508,6 +520,7 @@ public class ShooterSubsystem extends SubsystemBase {
      */
     public void intakeWithPID() {
         setShooterVelocity(-INTAKE_VELOCITY_RPM);
+        setFeeders(TOWER_POWER, CONVEYOR_POWER);
     }
 
     /**
@@ -515,8 +528,8 @@ public class ShooterSubsystem extends SubsystemBase {
      * @return Current velocity in RPM
      */
     public double getShooterVelocity() {
-        double leftVel = shooterMotorLeft.getEncoder().getVelocity();
-        double rightVel = shooterMotorRight.getEncoder().getVelocity();
+        double leftVel = Math.abs(shooterMotorLeft.getEncoder().getVelocity());
+        double rightVel = Math.abs(shooterMotorRight.getEncoder().getVelocity());
         return (leftVel + rightVel) / 2.0;
     }
 
@@ -555,8 +568,6 @@ public class ShooterSubsystem extends SubsystemBase {
                    String.format("%.2f", ffVoltage) + "V, duty=" + String.format("%.2f", dutyCycle));
         shooterMotorLeft.set(dutyCycle);
         shooterMotorRight.set(dutyCycle);
-        towerMotor.set(TOWER_POWER);
-        conveyorMotor.set(CONVEYOR_POWER);
     }
 
     /**

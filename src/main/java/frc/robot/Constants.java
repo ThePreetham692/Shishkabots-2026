@@ -21,6 +21,8 @@ import edu.wpi.first.units.Units;
  * constants are needed, to reduce verbosity.
  */
 public final class Constants {
+  public static final boolean USE_YAGSL = true;
+
   public static final class LimelightConstants {
     // Translation from the center of the robot to the camera (robot coordinates).
     public static final Translation3d kCameraToRobot =

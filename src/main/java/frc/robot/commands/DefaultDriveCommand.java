@@ -6,11 +6,11 @@ package frc.robot.commands;
 
 import edu.wpi.first.wpilibj2.command.Command;
 import java.util.function.DoubleSupplier;
-import frc.robot.subsystems.DriveSubsystem;
+import frc.robot.subsystems.YagslSwerveSubsystem;
 
 /* You should consider using the more terse Command factories API instead https://docs.wpilib.org/en/stable/docs/software/commandbased/organizing-command-based.html#defining-commands */
 public class DefaultDriveCommand extends Command {
-  private final DriveSubsystem driveSubsystem;
+  private final YagslSwerveSubsystem driveSubsystem;
     private final DoubleSupplier xSpeedSupplier;
     private final DoubleSupplier ySpeedSupplier;
     private final DoubleSupplier rotationSupplier;
@@ -25,7 +25,7 @@ public class DefaultDriveCommand extends Command {
      * @param rotation The rotation speed supplier
      */
     public DefaultDriveCommand(
-            DriveSubsystem subsystem,
+            YagslSwerveSubsystem subsystem,
             DoubleSupplier xSpeed,
             DoubleSupplier ySpeed,
             DoubleSupplier rotation) {
@@ -33,7 +33,7 @@ public class DefaultDriveCommand extends Command {
     }
 
     public DefaultDriveCommand(
-            DriveSubsystem subsystem,
+            YagslSwerveSubsystem subsystem,
             DoubleSupplier xSpeed,
             DoubleSupplier ySpeed,
             DoubleSupplier rotation,

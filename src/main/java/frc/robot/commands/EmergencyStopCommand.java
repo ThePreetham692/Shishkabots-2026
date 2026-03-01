@@ -5,15 +5,15 @@
 package frc.robot.commands;
 
 import edu.wpi.first.wpilibj2.command.Command;
-import frc.robot.subsystems.DriveSubsystem;
+import frc.robot.subsystems.YagslSwerveSubsystem;
 import util.Logger;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
 /* You should consider using the more terse Command factories API instead https://docs.wpilib.org/en/stable/docs/software/commandbased/organizing-command-based.html#defining-commands */
 public class EmergencyStopCommand extends Command {
-  private final DriveSubsystem driveSubsystem;
+  private final YagslSwerveSubsystem driveSubsystem;
   /** Creates a new EmergencyStopCommand. */
-  public EmergencyStopCommand(DriveSubsystem driveSubsystem){
+  public EmergencyStopCommand(YagslSwerveSubsystem driveSubsystem){
         this.driveSubsystem = driveSubsystem;
         
         // Add all subsystems as requirements to ensure no other commands run on them

@@ -4,12 +4,12 @@ import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.subsystems.LimelightSubsystem;
-import frc.robot.subsystems.DriveSubsystem;
+import frc.robot.subsystems.YagslSwerveSubsystem;
 import util.Logger;
 
 public class AutoAllign extends Command {
   private final LimelightSubsystem limelight;
-  private final DriveSubsystem drive;
+  private final YagslSwerveSubsystem drive;
 
   // PID Controllers for alignment
   private final PIDController distancePID = new PIDController(0.8, 0, 0.05);
@@ -34,7 +34,7 @@ public class AutoAllign extends Command {
   /**
    * Creates a new AutoAlign command with default 1.0m target distance.
    */
-  public AutoAllign(LimelightSubsystem limelight, DriveSubsystem drive) {
+  public AutoAllign(LimelightSubsystem limelight, YagslSwerveSubsystem drive) {
     this(limelight, drive, 1.0);
   }
 
@@ -44,7 +44,10 @@ public class AutoAllign extends Command {
    * @param drive The drive subsystem
    * @param targetDistanceMeters Distance to maintain from AprilTag (meters)
    */
-  public AutoAllign(LimelightSubsystem limelight, DriveSubsystem drive, double targetDistanceMeters) {
+  public AutoAllign(
+      LimelightSubsystem limelight,
+      YagslSwerveSubsystem drive,
+      double targetDistanceMeters) {
     this.limelight = limelight;
     this.drive = drive;
     this.targetDistance = targetDistanceMeters;
@@ -106,7 +109,7 @@ public class AutoAllign extends Command {
         currentDistance, distanceError, tx, vx, vy, omega));
 
     // Drive the robot
-    drive.drive(vx, vy, omega);
+    drive.driveMetersPerSecond(vx, vy, omega, true);
   }
 
   /**
