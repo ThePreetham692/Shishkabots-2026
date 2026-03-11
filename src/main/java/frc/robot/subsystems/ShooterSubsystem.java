@@ -53,8 +53,8 @@ public class ShooterSubsystem extends SubsystemBase {
 
     
     // Feed power into shooter wheels. Lower values reduce "pop-up" at entry and flatten flight path.
-    private static final double TOWER_POWER = 0.65;
-    private static final double CONVEYOR_POWER = 0.45;
+    private static final double TOWER_POWER = 0.85;
+    private static final double CONVEYOR_POWER = 0.65;
 
     // PID constants for shooter velocity control - aggressive tuning for faster response
     private static final double SHOOTER_P = 0.02;
@@ -81,7 +81,7 @@ public class ShooterSubsystem extends SubsystemBase {
 
     // Target velocity for shooter (RPM)
     // Slightly faster wheel speed while keeping feed gentler for a flatter shot.
-    private static final double SHOOTING_VELOCITY_RPM = 6200;
+    private static final double SHOOTING_VELOCITY_RPM = 6400;
     private static final double INTAKE_VELOCITY_RPM = 2000;
     private double targetVelocity = 0;
 

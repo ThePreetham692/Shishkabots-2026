@@ -70,15 +70,13 @@ public final class Constants {
         // 4. Copy those values here as the angular offsets
         // 5. Re-deploy and test - all wheels should now point forward when driving forward
         // ======================================================================
-        // Replace 0.0 values below with radians from Shuffleboard:
-        // Calibration/FrontLeft, Calibration/FrontRight, Calibration/BackLeft, Calibration/BackRight
-        // Calibrated from absolute encoder duty-cycle rotations:
-        // FL(CAN 4)=0.12190585, FR(CAN 2)=0.20184588, BL(CAN 6)=0.14039978, BR(CAN 8)=0.39797407
-        // Converted to radians because turning encoder position conversion is rotations->radians.
-        public static final double FRONT_LEFT_CHASIS_ANGULAR_OFFSET = 0.76595704558;
-        public static final double FRONT_RIGHT_CHASIS_ANGULAR_OFFSET = 1.26823506753;
-        public static final double BACK_LEFT_CHASIS_ANGULAR_OFFSET = 0.88215783483;
-        public static final double BACK_RIGHT_CHASIS_ANGULAR_OFFSET = 2.50054482926;
+        // Absolute encoder zero offsets in radians.
+        // Source duty-cycle offsets:
+        // FR(CAN 2)=0.70537406, FL(CAN 4)=0.6331861, BL(CAN 6)=0.6369773, BR(CAN 8)=0.90057755
+        public static final double FRONT_LEFT_CHASIS_ANGULAR_OFFSET = 3.97842560023;
+        public static final double FRONT_RIGHT_CHASIS_ANGULAR_OFFSET = 4.43199592986;
+        public static final double BACK_LEFT_CHASIS_ANGULAR_OFFSET = 4.00224641237;
+        public static final double BACK_RIGHT_CHASIS_ANGULAR_OFFSET = 5.65849563014;
 
         // Spark Max CAN IDs
         public static final int DRIVE_FRONT_LEFT_CAN_ID = 3;
@@ -130,6 +128,8 @@ public static final class ModuleConstants {
 
         public static final double ROTATIONS_TO_RADIANS = 2 * Math.PI;
         public static final double RPM_TO_RADPS = 2 * Math.PI / 60.0;
+        public static final double ROTATIONS_TO_DEGREES = 360.0;
+        public static final double RPM_TO_DEGPS = 360.0 / 60.0;
 
     }
     public static final class NeoMotorConstants {

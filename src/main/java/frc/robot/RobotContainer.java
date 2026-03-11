@@ -39,11 +39,7 @@ public class RobotContainer {
   private final XboxController mechanismController = new XboxController(OPERATOR_CONTROLLER_PORT); // Secondary controller
 
   private static final double DEADBAND = 0.10;
-  private static final double ROTATION_MULTIPLIER = 0.70;
-  private static final double NORMAL_TRANSLATION_SCALE = 0.70;
-  private static final double NORMAL_ROTATION_SCALE = 0.65;
-  private static final double SPRINT_TRANSLATION_SCALE = 1.00;
-  private static final double SPRINT_ROTATION_SCALE = 0.90;
+  private static final double TELEOP_TRANSLATION_SCALE = 0.25;
   private static final boolean TELEOP_FIELD_RELATIVE = false;
 
   // setup the AutoBuilder with all pathplanner paths in place
@@ -51,62 +47,6 @@ public class RobotContainer {
 
   public LimelightSubsystem getLimelightSubsystem() {
     return limelightSubsystem;
-  }
-
-  private double applyDeadbandAndCurve(double value) {
-    if (Math.abs(value) < DEADBAND) {
-      return 0.0;
-    }
-
-    double sign = Math.signum(value);
-    double adjusted = (Math.abs(value) - DEADBAND) / (1.0 - DEADBAND);
-    // Blend linear and cubic to keep fine control near center without feeling sluggish at mid-stick.
-    double curved = 0.5 * adjusted + 0.5 * adjusted * adjusted * adjusted;
-    return sign * curved;
-  }
-
-  private double[] getTranslationInputs() {
-    XboxController controller = getActiveController();
-    double rawForward = -controller.getLeftY();
-    double rawStrafe = -controller.getLeftX();
-
-    double magnitude = Math.hypot(rawForward, rawStrafe);
-    if (magnitude < DEADBAND) {
-      return new double[] {0.0, 0.0};
-    }
-
-    double adjustedMagnitude = (magnitude - DEADBAND) / (1.0 - DEADBAND);
-    double curvedMagnitude =
-        0.5 * adjustedMagnitude + 0.5 * adjustedMagnitude * adjustedMagnitude * adjustedMagnitude;
-
-    double unitForward = rawForward / magnitude;
-    double unitStrafe = rawStrafe / magnitude;
-    return new double[] {unitForward * curvedMagnitude, unitStrafe * curvedMagnitude};
-  }
-
-  private double getTranslationScale() {
-    return getActiveController().getRightBumperButton()
-        ? SPRINT_TRANSLATION_SCALE
-        : NORMAL_TRANSLATION_SCALE;
-  }
-
-  private double getRotationScale() {
-    return getActiveController().getRightBumperButton() ? SPRINT_ROTATION_SCALE : NORMAL_ROTATION_SCALE;
-  }
-
-  private double getForwardInput() {
-    return getTranslationInputs()[0];
-  }
-
-  private double getStrafeInput() {
-    return getTranslationInputs()[1];
-  }
-
-  private double getTurnInput() {
-    double rawTurn = -getActiveController().getRightX();
-    double deadbanded = MathUtil.applyDeadband(rawTurn, DEADBAND);
-    double cubic = deadbanded * deadbanded * deadbanded;
-    return MathUtil.clamp(cubic * ROTATION_MULTIPLIER * getRotationScale(), -1.0, 1.0);
   }
 
   private XboxController getActiveController() {
@@ -124,6 +64,20 @@ public class RobotContainer {
         () -> driveController.getRawButton(buttonId) || mechanismController.getRawButton(buttonId));
   }
 
+  private double getForwardInput() {
+    return MathUtil.applyDeadband(-getActiveController().getLeftY(), DEADBAND);
+  }
+
+  private double getStrafeInput() {
+    // Left stick X commands pure left/right translation.
+    return MathUtil.applyDeadband(-getActiveController().getLeftX(), DEADBAND);
+  }
+
+  private double getTurnInput() {
+    // Disable turning: translation-only calibration mode.
+    return 0.0;
+  }
+
   /** The container for the robot. Contains subsystems, OI devices, and commands. */
   public RobotContainer() {
     // Configure the trigger bindings
@@ -132,8 +86,8 @@ public class RobotContainer {
     driveSubsystem.setDefaultCommand(
         new DefaultDriveCommand(
             driveSubsystem,
-            () -> getForwardInput() * getTranslationScale(),
-            () -> getStrafeInput() * getTranslationScale(),
+            () -> getForwardInput() * TELEOP_TRANSLATION_SCALE,
+            () -> getStrafeInput() * TELEOP_TRANSLATION_SCALE,
             () -> getTurnInput(),
             TELEOP_FIELD_RELATIVE
         )
@@ -153,16 +107,13 @@ public class RobotContainer {
    * joysticks}.
    */
   private void configureBindings() {
-    // Start: zero gyro heading for drivebase.
     button(XboxController.Button.kStart.value)
         .onTrue(Commands.runOnce(driveSubsystem::zeroHeading, driveSubsystem));
-
-    // Y / Back: point all wheels forward for quick alignment reset.
     button(XboxController.Button.kY.value)
         .onTrue(Commands.runOnce(() -> driveSubsystem.setAllWheelAngles(0.0), driveSubsystem));
     button(XboxController.Button.kBack.value)
         .onTrue(Commands.runOnce(() -> driveSubsystem.setAllWheelAngles(0.0), driveSubsystem));
-    // Right stick click: hold modules at initial straight position.
+    // Right stick click sets/holds the initial straight wheel position.
     button(XboxController.Button.kRightStick.value)
         .whileTrue(Commands.run(() -> driveSubsystem.setAllWheelAngles(0.0), driveSubsystem));
 
