@@ -4,8 +4,8 @@
 
 package frc.robot;
 
-import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
@@ -39,14 +39,39 @@ public class RobotContainer {
   private final XboxController mechanismController = new XboxController(OPERATOR_CONTROLLER_PORT); // Secondary controller
 
   private static final double DEADBAND = 0.10;
-  private static final double TELEOP_TRANSLATION_SCALE = 0.25;
+  private static final double NORMAL_TRANSLATION_SCALE = 0.70;
+  private static final double SPRINT_TRANSLATION_SCALE = 1.00;
+  private static final double ROTATION_SCALE = 0.60;
   private static final boolean TELEOP_FIELD_RELATIVE = false;
+  // On this robot, module "forward" aligns at 90 deg in the wheel-angle test helper.
+  private static final double RESET_WHEEL_FORWARD_DEGREES = 90.0;
 
   // setup the AutoBuilder with all pathplanner paths in place
   private SendableChooser<Command> autoChooser = new SendableChooser<>();
 
   public LimelightSubsystem getLimelightSubsystem() {
     return limelightSubsystem;
+  }
+
+  private double getTranslationScale() {
+    return getActiveController().getRightBumperButton()
+        ? SPRINT_TRANSLATION_SCALE
+        : NORMAL_TRANSLATION_SCALE;
+  }
+
+  private double getForwardInput() {
+    // Straight-drive mode: right joystick Y is the only translation command.
+    return edu.wpi.first.math.MathUtil.applyDeadband(-getActiveController().getRightY(), DEADBAND);
+  }
+
+  private double getStrafeInput() {
+    // Disable strafe entirely.
+    return 0.0;
+  }
+
+  private double getTurnInput() {
+    // Re-enable turn for testing (right stick X).
+    return MathUtil.applyDeadband(-getActiveController().getRightX(), DEADBAND) * ROTATION_SCALE;
   }
 
   private XboxController getActiveController() {
@@ -64,20 +89,6 @@ public class RobotContainer {
         () -> driveController.getRawButton(buttonId) || mechanismController.getRawButton(buttonId));
   }
 
-  private double getForwardInput() {
-    return MathUtil.applyDeadband(-getActiveController().getLeftY(), DEADBAND);
-  }
-
-  private double getStrafeInput() {
-    // Left stick X commands pure left/right translation.
-    return MathUtil.applyDeadband(-getActiveController().getLeftX(), DEADBAND);
-  }
-
-  private double getTurnInput() {
-    // Disable turning: translation-only calibration mode.
-    return 0.0;
-  }
-
   /** The container for the robot. Contains subsystems, OI devices, and commands. */
   public RobotContainer() {
     // Configure the trigger bindings
@@ -86,8 +97,8 @@ public class RobotContainer {
     driveSubsystem.setDefaultCommand(
         new DefaultDriveCommand(
             driveSubsystem,
-            () -> getForwardInput() * TELEOP_TRANSLATION_SCALE,
-            () -> getStrafeInput() * TELEOP_TRANSLATION_SCALE,
+            () -> getForwardInput() * getTranslationScale(),
+            () -> getStrafeInput() * getTranslationScale(),
             () -> getTurnInput(),
             TELEOP_FIELD_RELATIVE
         )
@@ -107,15 +118,12 @@ public class RobotContainer {
    * joysticks}.
    */
   private void configureBindings() {
+    // Start: zero gyro and point wheels to known forward alignment.
     button(XboxController.Button.kStart.value)
-        .onTrue(Commands.runOnce(driveSubsystem::zeroHeading, driveSubsystem));
-    button(XboxController.Button.kY.value)
-        .onTrue(Commands.runOnce(() -> driveSubsystem.setAllWheelAngles(0.0), driveSubsystem));
-    button(XboxController.Button.kBack.value)
-        .onTrue(Commands.runOnce(() -> driveSubsystem.setAllWheelAngles(0.0), driveSubsystem));
-    // Right stick click sets/holds the initial straight wheel position.
-    button(XboxController.Button.kRightStick.value)
-        .whileTrue(Commands.run(() -> driveSubsystem.setAllWheelAngles(0.0), driveSubsystem));
+        .onTrue(Commands.runOnce(() -> {
+          driveSubsystem.zeroHeading();
+          driveSubsystem.setAllWheelAngles(RESET_WHEEL_FORWARD_DEGREES);
+        }, driveSubsystem));
 
     // Toggle B: press once to run shooter + tower + conveyor, press again to stop.
     // Use steady open-loop output to avoid velocity-PID oscillation (red/green flicker).

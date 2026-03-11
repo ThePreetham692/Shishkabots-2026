@@ -39,6 +39,7 @@ public class ShooterSubsystem extends SubsystemBase {
     // Closed loop controllers for PID velocity control
     private final SparkClosedLoopController leftClosedLoop;
     private final SparkClosedLoopController rightClosedLoop;
+    private final SparkClosedLoopController towerClosedLoop;
 
 
 
@@ -53,14 +54,20 @@ public class ShooterSubsystem extends SubsystemBase {
 
     
     // Feed power into shooter wheels. Lower values reduce "pop-up" at entry and flatten flight path.
-    private static final double TOWER_POWER = 0.85;
-    private static final double CONVEYOR_POWER = 0.65;
+    private static final double TOWER_POWER = 0.65;
+    private static final double CONVEYOR_POWER = 0.45;
+    private static final double NEO_FREE_SPEED_RPM = 5676.0;
+    private static final double TOWER_TARGET_RPM = TOWER_POWER * NEO_FREE_SPEED_RPM;
 
     // PID constants for shooter velocity control - aggressive tuning for faster response
     private static final double SHOOTER_P = 0.02;
     private static final double SHOOTER_I = 0.0;
     private static final double SHOOTER_D = 0.001;
     private static final double SHOOTER_FF = 0.00019; // Feedforward for SparkMax built-in
+    private static final double TOWER_P = 0.0005;
+    private static final double TOWER_I = 0.0;
+    private static final double TOWER_D = 0.0;
+    private static final double TOWER_FF = 0.00017;
     private static final double SHOOTER_OUTPUT_SCALE = 1.00; // Full output scaling for max speed
 
     // WPILib SimpleMotorFeedforward for proper feedforward control
@@ -81,7 +88,7 @@ public class ShooterSubsystem extends SubsystemBase {
 
     // Target velocity for shooter (RPM)
     // Slightly faster wheel speed while keeping feed gentler for a flatter shot.
-    private static final double SHOOTING_VELOCITY_RPM = 6400;
+    private static final double SHOOTING_VELOCITY_RPM = 6200;
     private static final double INTAKE_VELOCITY_RPM = 2000;
     private double targetVelocity = 0;
 
@@ -120,6 +127,7 @@ public class ShooterSubsystem extends SubsystemBase {
         // Get closed loop controllers for PID control
         leftClosedLoop = shooterMotorLeft.getClosedLoopController();
         rightClosedLoop = shooterMotorRight.getClosedLoopController();
+        towerClosedLoop = towerMotor.getClosedLoopController();
 
         // Configure shooter left motor with PID
         SparkMaxConfig shooterLeftConfig = new SparkMaxConfig();
@@ -165,7 +173,14 @@ public class ShooterSubsystem extends SubsystemBase {
             .idleMode(IdleMode.kCoast)
             .inverted(false)
             .smartCurrentLimit(TOWER_CURRENT_LIMIT)
-            .openLoopRampRate(0.05);
+            .openLoopRampRate(0.05)
+            .closedLoopRampRate(0.05)
+            .voltageCompensation(12.0);
+        towerConfig.closedLoop
+            .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
+            .pid(TOWER_P, TOWER_I, TOWER_D)
+            .velocityFF(TOWER_FF)
+            .outputRange(-1, 1);
 
         towerMotor.configure(
             towerConfig,
@@ -290,8 +305,12 @@ public class ShooterSubsystem extends SubsystemBase {
         Logger.log("Setting shooter power to " + scaledOutput + " (scaled)");
         shooterMotorLeft.set(scaledOutput);
         shooterMotorRight.set(scaledOutput);
-        towerMotor.set(TOWER_POWER);
+        runTowerClosedLoop();
         conveyorMotor.set(CONVEYOR_POWER);
+    }
+
+    private void runTowerClosedLoop() {
+        towerClosedLoop.setReference(TOWER_TARGET_RPM, ControlType.kVelocity);
     }
 
     /**
@@ -388,6 +407,7 @@ public class ShooterSubsystem extends SubsystemBase {
         // Get velocities
         double leftVelocity = shooterMotorLeft.getEncoder().getVelocity();
         double rightVelocity = shooterMotorRight.getEncoder().getVelocity();
+        double towerVelocity = towerMotor.getEncoder().getVelocity();
 
         // Send to SmartDashboard (visible in Shuffleboard)
         SmartDashboard.putNumber("Shooter/LeftVoltage", shooterLeftVoltage);
@@ -402,6 +422,8 @@ public class ShooterSubsystem extends SubsystemBase {
         SmartDashboard.putNumber("Shooter/TargetVelocityRPM", targetVelocity);
         SmartDashboard.putNumber("Shooter/LeftVelocityRPM", leftVelocity);
         SmartDashboard.putNumber("Shooter/RightVelocityRPM", rightVelocity);
+        SmartDashboard.putNumber("Shooter/TowerTargetRPM", TOWER_TARGET_RPM);
+        SmartDashboard.putNumber("Shooter/TowerVelocityRPM", towerVelocity);
         SmartDashboard.putNumber("Shooter/VelocityErrorRPM", targetVelocity - getShooterVelocity());
 
         // Tangential velocity (exit speed of game piece)
@@ -418,7 +440,7 @@ public class ShooterSubsystem extends SubsystemBase {
         Logger.log("Setting shooter power to " + scaledPower + " (scaled)");
         shooterMotorLeft.set(scaledPower);
         shooterMotorRight.set(scaledPower);
-        towerMotor.set(TOWER_POWER);
+        runTowerClosedLoop();
         conveyorMotor.set(CONVEYOR_POWER);
     }
 
@@ -492,7 +514,7 @@ public class ShooterSubsystem extends SubsystemBase {
         Logger.log("Setting shooter velocity to " + scaledVelocityRPM + " RPM (scaled)");
         leftClosedLoop.setReference(scaledVelocityRPM, ControlType.kVelocity);
         rightClosedLoop.setReference(scaledVelocityRPM, ControlType.kVelocity);
-        towerMotor.set(TOWER_POWER);
+        runTowerClosedLoop();
         conveyorMotor.set(CONVEYOR_POWER);
     }
 
@@ -555,7 +577,7 @@ public class ShooterSubsystem extends SubsystemBase {
                    String.format("%.2f", ffVoltage) + "V, duty=" + String.format("%.2f", dutyCycle));
         shooterMotorLeft.set(dutyCycle);
         shooterMotorRight.set(dutyCycle);
-        towerMotor.set(TOWER_POWER);
+        runTowerClosedLoop();
         conveyorMotor.set(CONVEYOR_POWER);
     }
 
