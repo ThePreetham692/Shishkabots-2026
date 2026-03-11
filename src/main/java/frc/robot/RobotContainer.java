@@ -120,7 +120,8 @@ public class RobotContainer {
   }
 
   private Trigger button(int buttonId) {
-    return new Trigger(() -> getActiveController().getRawButton(buttonId));
+    return new Trigger(
+        () -> driveController.getRawButton(buttonId) || mechanismController.getRawButton(buttonId));
   }
 
   /** The container for the robot. Contains subsystems, OI devices, and commands. */
@@ -161,6 +162,9 @@ public class RobotContainer {
         .onTrue(Commands.runOnce(() -> driveSubsystem.setAllWheelAngles(0.0), driveSubsystem));
     button(XboxController.Button.kBack.value)
         .onTrue(Commands.runOnce(() -> driveSubsystem.setAllWheelAngles(0.0), driveSubsystem));
+    // Right stick click: hold modules at initial straight position.
+    button(XboxController.Button.kRightStick.value)
+        .whileTrue(Commands.run(() -> driveSubsystem.setAllWheelAngles(0.0), driveSubsystem));
 
     // Toggle B: press once to run shooter + tower + conveyor, press again to stop.
     // Use steady open-loop output to avoid velocity-PID oscillation (red/green flicker).
