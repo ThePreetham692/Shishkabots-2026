@@ -38,13 +38,12 @@ public class RobotContainer {
   private final XboxController driveController = new XboxController(DRIVER_CONTROLLER_PORT); // Primary controller
   private final XboxController mechanismController = new XboxController(OPERATOR_CONTROLLER_PORT); // Secondary controller
 
-  private static final double DEADBAND = 0.10;
+  private static final double DEADBAND = 0.05;
   private static final double NORMAL_TRANSLATION_SCALE = 0.70;
   private static final double SPRINT_TRANSLATION_SCALE = 1.00;
   private static final double ROTATION_SCALE = 0.60;
   private static final boolean TELEOP_FIELD_RELATIVE = false;
-  // On this robot, module "forward" aligns at 90 deg in the wheel-angle test helper.
-  private static final double RESET_WHEEL_FORWARD_DEGREES = 90.0;
+  private static final double RESET_WHEEL_FORWARD_DEGREES = 0.0;
 
   // setup the AutoBuilder with all pathplanner paths in place
   private SendableChooser<Command> autoChooser = new SendableChooser<>();
@@ -60,17 +59,17 @@ public class RobotContainer {
   }
 
   private double getForwardInput() {
-    // Straight-drive mode: right joystick Y is the only translation command.
-    return edu.wpi.first.math.MathUtil.applyDeadband(-getActiveController().getRightY(), DEADBAND);
+    // Left stick Y -> forward/backward.
+    return MathUtil.applyDeadband(-getActiveController().getLeftY(), DEADBAND);
   }
 
   private double getStrafeInput() {
-    // Disable strafe entirely.
-    return 0.0;
+    // Left stick X -> strafe.
+    return MathUtil.applyDeadband(-getActiveController().getLeftX(), DEADBAND);
   }
 
   private double getTurnInput() {
-    // Re-enable turn for testing (right stick X).
+    // Right stick X -> rotation.
     return MathUtil.applyDeadband(-getActiveController().getRightX(), DEADBAND) * ROTATION_SCALE;
   }
 
@@ -87,6 +86,12 @@ public class RobotContainer {
   private Trigger button(int buttonId) {
     return new Trigger(
         () -> driveController.getRawButton(buttonId) || mechanismController.getRawButton(buttonId));
+  }
+
+  public void initializeStraightFromCalibration() {
+    // 0 deg command is the calibrated "straight forward" reference for all modules.
+    driveSubsystem.setAllWheelAngles(RESET_WHEEL_FORWARD_DEGREES);
+    driveSubsystem.zeroHeading();
   }
 
   /** The container for the robot. Contains subsystems, OI devices, and commands. */
@@ -118,12 +123,12 @@ public class RobotContainer {
    * joysticks}.
    */
   private void configureBindings() {
-    // Start: zero gyro and point wheels to known forward alignment.
+    // Start: zero gyro; hold to keep modules at calibrated straight-forward reference (0 deg).
     button(XboxController.Button.kStart.value)
-        .onTrue(Commands.runOnce(() -> {
-          driveSubsystem.zeroHeading();
-          driveSubsystem.setAllWheelAngles(RESET_WHEEL_FORWARD_DEGREES);
-        }, driveSubsystem));
+        .onTrue(Commands.runOnce(driveSubsystem::zeroHeading, driveSubsystem))
+        .whileTrue(Commands.run(
+            () -> driveSubsystem.setAllWheelAngles(RESET_WHEEL_FORWARD_DEGREES),
+            driveSubsystem));
 
     // Toggle B: press once to run shooter + tower + conveyor, press again to stop.
     // Use steady open-loop output to avoid velocity-PID oscillation (red/green flicker).

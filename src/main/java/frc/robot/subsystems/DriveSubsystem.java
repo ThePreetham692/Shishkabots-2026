@@ -31,6 +31,11 @@ import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.Constants.DriveConstants;
 
 public class DriveSubsystem extends SubsystemBase {
+    // Normalize any steering angle to [-pi, pi] where 0 means wheel points straight forward.
+    private static double wrapToPi(double angleRadians) {
+        return Math.atan2(Math.sin(angleRadians), Math.cos(angleRadians));
+    }
+
   /** Creates a new DriveSubsystem. */
   // Commented out limelight camera as it's no longer used
     // private LimelightSubsystem m_LimelightSubsystem;
@@ -303,8 +308,8 @@ public class DriveSubsystem extends SubsystemBase {
                 SmartDashboard.putNumberArray("SwerveModuleStates", loggingState);
 
                 // === CALIBRATION OUTPUT ===
-                // Point all wheels forward manually, then read these values (in radians)
-                // Copy these values to Constants.java as angular offsets
+                // Calibration reference: 0 rad / 0 deg means wheel points straight forward.
+                // Point all wheels forward manually, then read raw absolute values below and copy to Constants offsets.
                 SmartDashboard.putNumber("Calibration/FrontLeft", m_frontLeft.getRawAbsoluteEncoderPosition());
                 SmartDashboard.putNumber("Calibration/FrontRight", m_frontRight.getRawAbsoluteEncoderPosition());
                 SmartDashboard.putNumber("Calibration/BackLeft", m_backLeft.getRawAbsoluteEncoderPosition());
@@ -315,6 +320,10 @@ public class DriveSubsystem extends SubsystemBase {
                 SmartDashboard.putNumber("Calibration/FR_Degrees", Math.toDegrees(m_frontRight.getRawAbsoluteEncoderPosition()));
                 SmartDashboard.putNumber("Calibration/BL_Degrees", Math.toDegrees(m_backLeft.getRawAbsoluteEncoderPosition()));
                 SmartDashboard.putNumber("Calibration/BR_Degrees", Math.toDegrees(m_backRight.getRawAbsoluteEncoderPosition()));
+                SmartDashboard.putNumber("Calibration/OffsetRotations/FrontLeft", DriveConstants.FRONT_LEFT_CHASIS_ANGULAR_OFFSET / (2.0 * Math.PI));
+                SmartDashboard.putNumber("Calibration/OffsetRotations/FrontRight", DriveConstants.FRONT_RIGHT_CHASIS_ANGULAR_OFFSET / (2.0 * Math.PI));
+                SmartDashboard.putNumber("Calibration/OffsetRotations/BackLeft", DriveConstants.BACK_LEFT_CHASIS_ANGULAR_OFFSET / (2.0 * Math.PI));
+                SmartDashboard.putNumber("Calibration/OffsetRotations/BackRight", DriveConstants.BACK_RIGHT_CHASIS_ANGULAR_OFFSET / (2.0 * Math.PI));
 
                 // Show gyro heading
                 SmartDashboard.putNumber("Drive/Gyro_Degrees", getGyroRotation().getDegrees());
@@ -335,6 +344,20 @@ public class DriveSubsystem extends SubsystemBase {
                 SmartDashboard.putNumber("Drive/FrontRight/DesiredAngleRad", m_frontRight.getDesiredAngle());
                 SmartDashboard.putNumber("Drive/BackLeft/DesiredAngleRad", m_backLeft.getDesiredAngle());
                 SmartDashboard.putNumber("Drive/BackRight/DesiredAngleRad", m_backRight.getDesiredAngle());
+
+                // Steering error relative to forward (0 rad). Near 0 means the module is straight.
+                double flForwardErrorRad = wrapToPi(m_frontLeft.getSteerAngle());
+                double frForwardErrorRad = wrapToPi(m_frontRight.getSteerAngle());
+                double blForwardErrorRad = wrapToPi(m_backLeft.getSteerAngle());
+                double brForwardErrorRad = wrapToPi(m_backRight.getSteerAngle());
+                SmartDashboard.putNumber("CalibrationError/FrontLeftRad", flForwardErrorRad);
+                SmartDashboard.putNumber("CalibrationError/FrontRightRad", frForwardErrorRad);
+                SmartDashboard.putNumber("CalibrationError/BackLeftRad", blForwardErrorRad);
+                SmartDashboard.putNumber("CalibrationError/BackRightRad", brForwardErrorRad);
+                SmartDashboard.putNumber("CalibrationError/FrontLeftDeg", Math.toDegrees(flForwardErrorRad));
+                SmartDashboard.putNumber("CalibrationError/FrontRightDeg", Math.toDegrees(frForwardErrorRad));
+                SmartDashboard.putNumber("CalibrationError/BackLeftDeg", Math.toDegrees(blForwardErrorRad));
+                SmartDashboard.putNumber("CalibrationError/BackRightDeg", Math.toDegrees(brForwardErrorRad));
 
                 SmartDashboard.putNumber("Drive/FrontLeft/DriveSpeedMps", m_frontLeft.getDriveSpeed());
                 SmartDashboard.putNumber("Drive/FrontRight/DriveSpeedMps", m_frontRight.getDriveSpeed());
@@ -447,7 +470,8 @@ public class DriveSubsystem extends SubsystemBase {
     }
 
     /**
-     * Set all wheels to point at a specific angle (for testing swivel PID)
+     * Set all wheels to point at a specific angle (for testing swivel PID).
+     * Calibration reference: 0 degrees = wheels pointed straight forward.
      * @param angleDegrees Target angle in degrees (0 = forward)
      */
     public void setAllWheelAngles(double angleDegrees) {

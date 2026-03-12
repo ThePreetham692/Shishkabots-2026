@@ -76,11 +76,11 @@ public final class Constants {
         // FL(CAN 4)=0.12190585, FR(CAN 2)=0.20184588, BL(CAN 6)=0.14039978, BR(CAN 8)=0.39797407
         // Converted to radians because turning encoder position conversion is rotations->radians.
         // Updated from latest straight-ahead calibration (raw absolute encoder radians):
-        // FL (CAN 4)=0.784, FR (CAN 2)=1.269, BL (CAN 6)=0.925, BR (CAN 8)=5.664
-        public static final double FRONT_LEFT_CHASIS_ANGULAR_OFFSET = 0.784;
-        public static final double FRONT_RIGHT_CHASIS_ANGULAR_OFFSET = 1.269;
-        public static final double BACK_LEFT_CHASIS_ANGULAR_OFFSET = 0.925;
-        public static final double BACK_RIGHT_CHASIS_ANGULAR_OFFSET = 5.664;
+        // FL (CAN 4)=3.794, FR (CAN 2)=1.183, BL (CAN 6)=0.827, BR (CAN 8)=5.609
+        public static final double FRONT_LEFT_CHASIS_ANGULAR_OFFSET = 3.794;
+        public static final double FRONT_RIGHT_CHASIS_ANGULAR_OFFSET = 1.183;
+        public static final double BACK_LEFT_CHASIS_ANGULAR_OFFSET = 0.827;
+        public static final double BACK_RIGHT_CHASIS_ANGULAR_OFFSET = 5.609;
 
         // Spark Max CAN IDs
         public static final int DRIVE_FRONT_LEFT_CAN_ID = 3;
